@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>SKRAMBEASTS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Press+Start+2P&family=Rubik:wght@400;500;600;700&family=Rubik:ital@1&display=swap" rel="stylesheet">
@@ -430,7 +433,7 @@
    - ANDROID CONVERSION REQUIREMENT / SHARED BACKEND  - Firebase setup, read first
    - AD HOOK                                          - rewarded-ad choke point
    - EGGS                                             - egg system + hatching
-   - ACHIEVEMENTS                                     - 21 categories, 105 total
+   - ACHIEVEMENTS                                     - 26 categories, 130 total
    - Icon functions (iconX)                           - all small inline SVGs
    - RARITY_STYLE / RARITY_ORDER                      - core rarity data
    - generateMonster                                  - deterministic creation
@@ -442,7 +445,6 @@
    - Boss (Queen) system                              - generateBoss onward
    - Boss Training                                    - separate, repeatable
    - renderVersus / VS menu                           - PvP/Arena/Boss picker
-   - BLUETOOTH HOOK                                   - inside renderNearby, read first
    - renderProfile / renderSquadTab                   - Squad tab and sub-views
    - renderStore                                      - Store tab and categories
    - Settings                                         - showSettingsModal onward
@@ -649,13 +651,19 @@ function isMaxHitActive(){
 const HAS_CLAUDE_STORAGE = (typeof window.storage !== 'undefined' && !!window.storage);
 
 /* =========================================================================
-   !!! ANDROID CONVERSION REQUIREMENT - DO NOT SKIP !!!
+   !!! ANDROID CONVERSION REQUIREMENT - already satisfied, verify before shipping !!!
    Friends, the Leaderboard, and Nearby (Player VS Player) trading/duelling
-   are BUILT but will NOT WORK on Android until FIREBASE_DB_URL below is set.
-   This is not optional polish - without it these three features fail silently
-   for every player. See the full explanation below, then read the matching
-   BLUETOOTH HOOK comment further down (search for that exact text) before
-   considering the Android conversion complete.
+   need FIREBASE_DB_URL set below - it already is, pointing at a live project.
+   This note is a reminder to double-check that value is still correct at
+   release time, not a to-do.
+
+   If wrapped as a Trusted Web Activity (TWA): no extra native code is needed
+   for any of this - a TWA runs full Chrome, so these plain fetch() calls and
+   the camera's getUserMedia() work identically to how they do in a browser.
+   If wrapped as a plain native WebView instead: camera access needs manual
+   permission wiring in the native shell (AndroidManifest CAMERA permission +
+   a WebChromeClient.onPermissionRequest override) - Firebase itself still
+   needs no special handling either way, since it's just fetch().
    ========================================================================= */
 /* ---- SHARED BACKEND (Firebase Realtime Database) ----
    Friends, the Leaderboard, and Nearby trading/duelling all need data visible across
@@ -931,14 +939,14 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '1.95';
+const FIRMWARE_VERSION = '1.96';
 const FIRMWARE_CHANGELOG = [
-  'Fixed: coin pouch not updating after store purchases',
-  'Queen visuals overhauled - wings, crown, real legs',
-  'Bag: expensive-item sale warnings, Sell All moved down',
-  'Quests: greyed out once complete, XP boost ad added',
-  'Type matchups - six types, real damage bonuses',
-  'Scanner customisation - shell, laser & Skins',
+  'Fixed a rare glitch when quickly opening/closing Skrambeast profiles',
+  'Rank ribbon cleaned up - tier now shown by star colour, not repeated text',
+  'Tap "Highest Skrambeast" on your profile to view it',
+  'Sell All and Release are now clearly marked as high-risk actions',
+  'Global Leaderboard: Daily/Weekly/All Time boards, proper pagination, tap a player to see their best Skrambeast',
+  'Redesigned the egg nest artwork',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1082,22 +1090,37 @@ function rollEggTier(rng){
 }
 function nestSVG(size){
   const s = size||96;
-  const twigs = [];
-  const twigColors = ['#8a6d47','#6b4a2e','#a9784f','#7a5a38'];
-  for(let i=0;i<16;i++){
-    const angle = (i/16)*Math.PI*2;
-    const rx = 32+Math.random()*4, ry = 14+Math.random()*3;
-    const cx = 50+Math.cos(angle)*rx*0.3, cy = 62+Math.sin(angle)*ry*0.3;
-    const len = 22+Math.random()*10;
-    const rot = (angle*180/Math.PI)+(Math.random()*20-10);
+  const twigColors = ['#8a6d47','#6b4a2e','#a9784f','#7a5a38','#96754a'];
+  // Woven rim: strokes run roughly TANGENTIAL to a ring band (not radiating from the center
+  // like spokes - that's what made the old version read as a wheel instead of a nest).
+  const strokes = [];
+  for(let i=0;i<34;i++){
+    const angle = Math.random()*Math.PI*2;
+    const ringR = 20+Math.random()*13;
+    const cx = 50+Math.cos(angle)*ringR;
+    const cy = 58+Math.sin(angle)*ringR*0.42;
+    const tangent = angle+Math.PI/2+(Math.random()*0.7-0.35);
+    const len = 16+Math.random()*14;
+    const dx = Math.cos(tangent)*len/2, dy = Math.sin(tangent)*len/2*0.5;
     const color = twigColors[i%twigColors.length];
-    twigs.push(`<path d="M${cx-len/2} ${cy} Q${cx} ${cy-4} ${cx+len/2} ${cy}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" transform="rotate(${rot} ${cx} ${cy})"/>`);
+    strokes.push(`<path d="M${(cx-dx).toFixed(1)} ${(cy-dy).toFixed(1)} Q${cx.toFixed(1)} ${(cy-3).toFixed(1)} ${(cx+dx).toFixed(1)} ${(cy+dy).toFixed(1)}" fill="none" stroke="${color}" stroke-width="3.2" stroke-linecap="round" opacity="${(0.75+Math.random()*0.25).toFixed(2)}"/>`);
+  }
+  // A handful of loose ends poking past the outer rim - the messy "freshly gathered sticks" look
+  const wisps = [];
+  for(let i=0;i<8;i++){
+    const angle = Math.random()*Math.PI*2;
+    const r1 = 30+Math.random()*3, r2 = r1+8+Math.random()*6;
+    const x1 = 50+Math.cos(angle)*r1, y1 = 58+Math.sin(angle)*r1*0.42;
+    const x2 = 50+Math.cos(angle)*r2, y2 = 58+Math.sin(angle)*r2*0.42;
+    wisps.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${twigColors[i%twigColors.length]}" stroke-width="2.2" stroke-linecap="round" opacity=".7"/>`);
   }
   return `<svg viewBox="0 0 100 90" width="${s}" height="${s*0.9}">
-    <ellipse cx="50" cy="82" rx="28" ry="5" fill="#000" opacity=".12"/>
-    <ellipse cx="50" cy="60" rx="34" ry="17" fill="none" stroke="#5c3f22" stroke-width="5" opacity=".5"/>
-    ${twigs.join('')}
-    <ellipse cx="50" cy="61" rx="20" ry="9" fill="#1A1F1C" opacity=".28"/>
+    <ellipse cx="50" cy="80" rx="30" ry="5" fill="#000" opacity=".14"/>
+    <ellipse cx="50" cy="60" rx="36" ry="19" fill="#6b4a2e" opacity=".3"/>
+    ${strokes.join('')}
+    ${wisps.join('')}
+    <ellipse cx="50" cy="61" rx="17" ry="8" fill="#1A1F1C" opacity=".35"/>
+    <ellipse cx="50" cy="59" rx="17" ry="8" fill="none" stroke="#3d2a18" stroke-width="1.5" opacity=".4"/>
   </svg>`;
 }
 function eggSVG(barcode, size){
@@ -2013,6 +2036,17 @@ const HUNTER_RANKS = [
   {name:'Hunter Grandmaster ★★★', xp:148000, color:'#6b1a3a', marks:3},
   {name:'Hunter Champion', xp:192000, color:'#E8542E', marks:5},
 ];
+function rankRibbonLabel(rank){
+  // rank.name already embeds its own stars (e.g. "Marshal \u2605\u2605\u2605 Silver") - strip the
+  // trailing tier-colour word since the stars get recoloured below instead of spelling it out.
+  const stripped = rank.name.replace(/\s*(Bronze|Silver|Gold)\s*$/,'');
+  const starMatch = stripped.match(/^(.*?)\s*(\u2605+)\s*$/);
+  if(!starMatch) return stripped;
+  return `${starMatch[1]} <span style="color:${rank.color};">${starMatch[2]}</span>`;
+}
+function miniRankBadge(rank){
+  return `<svg viewBox="0 0 24 28" width="22" height="26"><path d="M2 2h20v15l-10 9-10-9z" fill="${rank.color}" stroke="#1A1F1C" stroke-width="1.6"/><circle cx="12" cy="11" r="3" fill="#fff" opacity=".85"/></svg>`;
+}
 function rankRibbonSVG(rank, width){
   const w = width||300, h = Math.round(w*0.16);
   const hatch = [];
@@ -2684,6 +2718,8 @@ function showExportModal(){
     <div class="buttons-row"><button class="btn cream small full" id="exportCloseBtn">Close</button></div>
   </div>`;
   document.body.appendChild(overlay);
+  const visibleTa = overlay.querySelector('textarea');
+  if(visibleTa){ visibleTa.focus(); visibleTa.setSelectionRange(0, code.length); }
   document.getElementById('exportCopyBtn').addEventListener('click', ()=> copyText(code, 'Save code copied!', "Couldn't copy automatically - long-press the code above to select and copy it manually"));
   document.getElementById('exportCloseBtn').addEventListener('click', ()=> overlay.remove());
 }
@@ -2720,7 +2756,7 @@ function showLegendaryShooWarning(onProceed, onCancel){
   overlay.className='modal-overlay';
   overlay.innerHTML = `<div class="modal-box confirm-box">
     <div class="confirm-msg">Okay, so you might be incredibly clever, or you pressed the wrong button? Which one is it?</div>
-    <div class="buttons-row"><button class="btn cream small full" id="legShooProceed">I know what I am doing</button></div>
+    <div class="buttons-row"><button class="btn-hazard small full" id="legShooProceed"><span class="hazard-label">I know what I am doing</span></button></div>
     <div class="buttons-row"><button class="btn cream small full" id="legShooBack">Take me back to squad</button></div>
   </div>`;
   document.body.appendChild(overlay);
@@ -3598,6 +3634,8 @@ function closeDetailModal(overlay){
   else renderTab();
 }
 function openDetailModal(m, editable, allowEquip){
+  const stale = document.querySelector('.modal-overlay');
+  if(stale){ if(stale._boostTimerInterval) clearInterval(stale._boostTimerInterval); stale.remove(); }
   if(allowEquip===undefined) allowEquip = true;
   document.body.style.overflow='hidden';
   const rs = RARITY_STYLE[m.rarity];
@@ -3617,7 +3655,7 @@ function openDetailModal(m, editable, allowEquip){
       <div class="stat-row" id="modalStatRow" style="margin-top:6px;">${statLine(es)}</div>
       <div class="hint" id="modalMaxHit" style="text-align:center;">Max Hit: ${es.power+3}</div>
       <div class="bio-text" style="max-width:none;text-align:center;">${m.bio}</div>
-      ${!editable? `<div class="hint" style="text-align:center;">${STATUS_LABEL_FULL[m.status]||m.status} · ${timeAgo(m.timestamp)}</div>`:''}
+      ${!editable && m.timestamp? `<div class="hint" style="text-align:center;">${STATUS_LABEL_FULL[m.status]||m.status} · ${timeAgo(m.timestamp)}</div>`:''}
       <div class="modal-actions" id="modalActions"></div>
     </div>`;
   document.body.appendChild(overlay);
@@ -3700,7 +3738,7 @@ function renderModalActions(container, m, overlay, allowEquip){
       showConfirm(`Release ${m.name} for good? This can't be undone.`, ()=>{
         releaseMonster(m.id); overlay.remove();
         if(m.rarity==='legendary') markEasterEggStep('egg3','e');
-      });
+      }, {hazard:true, confirmLabel:'Yes, release'});
     };
     if(m.rarity==='legendary'){
       showLegendaryShooWarning(proceedToRelease, ()=> overlay.remove());
@@ -3784,9 +3822,19 @@ function renderModalActions(container, m, overlay, allowEquip){
 }
 function legacyCopy(text){
   try{
-    const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
-    document.body.appendChild(ta); ta.focus(); ta.select();
-    const ok=document.execCommand('copy'); document.body.removeChild(ta); return ok;
+    const prevSelection = document.getSelection().rangeCount>0 ? document.getSelection().getRangeAt(0) : null;
+    const ta=document.createElement('textarea');
+    ta.value=text;
+    ta.style.position='absolute'; ta.style.top='0'; ta.style.left='-9999px'; // off-screen, but still genuinely rendered - opacity:0 makes select() unreliable on mobile
+    ta.style.fontSize='12pt'; // stops iOS auto-zooming into the field on focus
+    ta.contentEditable='true'; // some Android versions ignore select() on a plain textarea unless it's also editable
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    ta.setSelectionRange(0, text.length); // iOS Safari specifically requires this in addition to select()
+    const ok=document.execCommand('copy');
+    document.body.removeChild(ta);
+    if(prevSelection){ const sel=document.getSelection(); sel.removeAllRanges(); sel.addRange(prevSelection); }
+    return ok;
   }catch(e){ return false; }
 }
 // Anything read from shared storage (a friend's profile, a trade partner's offer) could have
@@ -3812,19 +3860,31 @@ function ensureHunterCode(){
 }
 function myPublicProfile(){
   const highest = [...state.collection].sort((a,b)=>b.level-a.level)[0];
+  const now = Date.now();
+  const DAY_MS = 86400000, WEEK_MS = 7*DAY_MS;
+  if(!state.dailyXpBaseline || now - state.dailyXpBaseline.start >= DAY_MS){
+    state.dailyXpBaseline = { start: now, xp: state.hunterXP||0 };
+  }
+  if(!state.weeklyXpBaseline || now - state.weeklyXpBaseline.start >= WEEK_MS){
+    state.weeklyXpBaseline = { start: now, xp: state.hunterXP||0 };
+  }
   return {
     name: state.hunterName||'Hunter',
     totalWins: state.stats.totalWins, totalFights: state.stats.totalFights, bestStreak: state.stats.bestStreak,
     discovered: Object.keys(state.almanac).length,
-    highest: highest? {name:highest.name, level:highest.level, rarity:highest.rarity} : null,
+    highest: highest? {barcode:highest.barcode, name:highest.name, type:highest.type, typeLabel:highest.typeLabel, typeColor:highest.typeColor, typeDark:highest.typeDark, rarity:highest.rarity, holo:highest.holo, hueShift:highest.hueShift, level:highest.level, bio:highest.bio, traits:Object.assign({},highest.traits), stats:Object.assign({},highest.stats)} : null,
     hunterXP: state.hunterXP||0,
+    dailyXP: Math.max(0, (state.hunterXP||0) - state.dailyXpBaseline.xp),
+    weeklyXP: Math.max(0, (state.hunterXP||0) - state.weeklyXpBaseline.xp),
     maxedCount: state.collection.filter(isMaxed).length,
-    lastSeen: Date.now()
+    lastSeen: now
   };
 }
 async function publishHunterProfile(){
   const code = ensureHunterCode();
-  try{ await storageSet('hunter:'+code, JSON.stringify(myPublicProfile()), true); }catch(e){}
+  const profile = myPublicProfile();
+  saveState(); // myPublicProfile may have just rolled the daily/weekly XP baseline forward - persist that
+  try{ await storageSet('hunter:'+code, JSON.stringify(profile), true); }catch(e){}
 }
 function renderProfile(container, panel){
   publishHunterProfile();
@@ -3853,8 +3913,8 @@ function renderProfile(container, panel){
     <div class="section-label">Hunter Profile</div>
     <div class="log-row"><div class="log-info"><div class="log-name">${p.name}</div><div class="log-meta">Wins ${p.totalWins} · Fights ${p.totalFights} · Best streak ${p.bestStreak} · Discovered ${p.discovered} · K:D ${kd} · ${achievementsUnlockedCount()}/${ACHIEVEMENT_CATEGORIES.length*5} Achievements</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Hunter Rank</div><div class="log-meta">Current Rank: ${rank.name}<br>${rankProgress}</div></div></div>
-    <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rank.name} ${'★'.repeat(Math.min(rank.marks||0,5))}</div></div>
-    <div class="log-row"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${p.highest? p.highest.name+' - Lv.'+p.highest.level+' ('+RARITY_STYLE[p.highest.rarity].label+')'+(p.highest.level>=MAX_LEVEL_BY_RARITY[p.highest.rarity]?` ${iconTrophy(13,RARITY_STYLE[p.highest.rarity].color)}`:'') : '-'}</div></div></div>
+    <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
+    <div class="log-row" id="highestBeastRow" style="${p.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${p.highest? p.highest.name+' - Lv.'+p.highest.level+' ('+RARITY_STYLE[p.highest.rarity].label+')'+(p.highest.level>=MAX_LEVEL_BY_RARITY[p.highest.rarity]?` ${iconTrophy(13,RARITY_STYLE[p.highest.rarity].color)}`:'') : '-'}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Max Level Trophies (${trophyCount})</div><div class="log-meta">${trophyRow}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Recent Achievements</div><div class="log-meta">${achRow}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Secrets Known</div></div><div class="log-status" id="secretsKnownBadge" style="${easterEggStepDone('egg1','a')?'background:#1A1F1C;color:#fff;':'background:#D4A017;'}">${secretsKnownCount()}/${GAME_SECRETS.length}</div></div>`;
@@ -3863,6 +3923,11 @@ function renderProfile(container, panel){
       const badge = document.getElementById('secretsKnownBadge');
       if(badge){ badge.style.background='#1A1F1C'; badge.style.color='#fff'; }
     }
+  });
+  const highestBeastRow = document.getElementById('highestBeastRow');
+  if(highestBeastRow) highestBeastRow.addEventListener('click', ()=>{
+    const highest = [...state.collection].sort((a,b)=>b.level-a.level)[0];
+    if(highest) openDetailModal(highest, true);
   });
 }
 async function fetchAllHunterProfiles(){
@@ -3888,6 +3953,10 @@ async function fetchAllHunterProfiles(){
   return [];
 }
 let friendsBoardMode = 'friends';
+let globalPeriod = 'alltime';
+let globalPage = 0;
+const GLOBAL_PAGE_SIZE = 10;
+const GLOBAL_MAX_ROWS = 100;
 function renderFriendsList(container){
   const code = ensureHunterCode();
   publishHunterProfile();
@@ -3901,6 +3970,12 @@ function renderFriendsList(container){
     ${localWarning}
     ${isGlobal ? `
     <div class="section-label" style="margin-top:6px;">Leaderboard</div>
+    <div class="buttons-row" style="margin-top:0;gap:4px;">
+      <button class="btn tiny ${globalPeriod==='daily'?'yolk':'cream'}" style="padding:3px 5px;font-size:9px;" data-period="daily">Daily</button>
+      <button class="btn tiny ${globalPeriod==='weekly'?'yolk':'cream'}" style="padding:3px 5px;font-size:9px;" data-period="weekly">Weekly</button>
+      <button class="btn tiny ${globalPeriod==='alltime'?'yolk':'cream'}" style="padding:3px 5px;font-size:9px;" data-period="alltime">All Time</button>
+    </div>
+    <div class="page-bar" id="globalPageBar" style="margin-top:6px;"></div>
     <div id="leaderboardInner"><div class="hint">Loading...</div></div>` : `
     <div class="section-label" style="margin-top:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;">
       <span>Add a Hunter</span>
@@ -3920,6 +3995,9 @@ function renderFriendsList(container){
   });
   container.querySelectorAll('[data-board]').forEach(b=> b.addEventListener('click', ()=>{
     friendsBoardMode = b.dataset.board; renderFriendsList(container);
+  }));
+  container.querySelectorAll('[data-period]').forEach(b=> b.addEventListener('click', ()=>{
+    globalPeriod = b.dataset.period; globalPage = 0; renderFriendsList(container);
   }));
   const setUsernameBtn = document.getElementById('setUsernameBtn');
   if(setUsernameBtn) setUsernameBtn.addEventListener('click', async ()=>{
@@ -3972,10 +4050,10 @@ function renderFriendsList(container){
     if(currentTab!=='collection') return; // player left the tab while these were in flight
     const leaderboardRowHTML = (pr, i, isMe)=>{
       const rank = HUNTER_RANKS[hunterRankIndex(pr.hunterXP||0)];
-      return `<div class="log-row" style="justify-content:space-between;">
+      return `<div class="log-row" style="justify-content:space-between;${pr.highest?'cursor:pointer;':''}" data-highest-idx="${i}">
         <span class="log-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i+1}. ${escapeHtml(pr.name)}${isMe?' (You)':''}</span>
         <span style="display:flex;align-items:center;gap:6px;flex:none;margin-left:6px;">
-          <span style="width:20px;height:16px;flex:none;background:${rank.color};border:1.5px solid #1A1F1C;border-radius:4px;"></span>
+          <span style="flex:none;display:flex;">${miniRankBadge(rank)}</span>
           <span class="log-meta" style="white-space:nowrap;display:flex;align-items:center;gap:2px;">${iconTrophy(11,'#D4A017')} ${pr.maxedCount||0}</span>
         </span>
       </div>`;
@@ -3986,16 +4064,34 @@ function renderFriendsList(container){
       boardEl.innerHTML = `<div class="hint">Loading global leaderboard...</div>`;
       const all = await fetchAllHunterProfiles();
       if(currentTab!=='collection' || friendsBoardMode!=='global') return; // left the tab, or toggled back to Friends List, while this was loading
-      const board = [{profile:me}, ...all.filter(r=>r.code!==code)]
-        .sort((a,b)=> (b.profile.hunterXP||0)-(a.profile.hunterXP||0))
-        .slice(0,20);
-      const myRank = board.findIndex(r=>r.profile===me);
-      if(myRank>=0){
-        state.stats.bestGlobalRank = Math.min(state.stats.bestGlobalRank||Infinity, myRank+1);
-        saveState(); checkAchievements();
+      const sortKey = globalPeriod==='daily' ? 'dailyXP' : globalPeriod==='weekly' ? 'weeklyXP' : 'hunterXP';
+      const fullBoard = [{profile:me}, ...all.filter(r=>r.code!==code)]
+        .sort((a,b)=> (b.profile[sortKey]||0)-(a.profile[sortKey]||0))
+        .slice(0, GLOBAL_MAX_ROWS);
+      if(globalPeriod==='alltime'){
+        const myRank = fullBoard.findIndex(r=>r.profile===me);
+        if(myRank>=0){
+          state.stats.bestGlobalRank = Math.min(state.stats.bestGlobalRank||Infinity, myRank+1);
+          saveState(); checkAchievements();
+        }
       }
+      const totalPages = Math.max(1, Math.ceil(fullBoard.length/GLOBAL_PAGE_SIZE));
+      globalPage = Math.min(globalPage, totalPages-1);
+      const pageBoard = fullBoard.slice(globalPage*GLOBAL_PAGE_SIZE, globalPage*GLOBAL_PAGE_SIZE+GLOBAL_PAGE_SIZE);
+      const pageBarEl = document.getElementById('globalPageBar');
+      if(pageBarEl) pageBarEl.innerHTML = `<button class="btn tiny cream" id="globalPrev" ${globalPage===0?'disabled':''}>${iconChevron('left')}</button><span class="pixel sm">${globalPage+1}/${totalPages}</span><button class="btn tiny cream" id="globalNext" ${globalPage>=totalPages-1?'disabled':''}>${iconChevron('right')}</button>`;
+      const prevBtn = document.getElementById('globalPrev'), nextBtn = document.getElementById('globalNext');
+      if(prevBtn) prevBtn.addEventListener('click', ()=>{ if(globalPage>0){ globalPage--; loadFriendsList(); } });
+      if(nextBtn) nextBtn.addEventListener('click', ()=>{ if(globalPage<totalPages-1){ globalPage++; loadFriendsList(); } });
       const boardElNow = document.getElementById('leaderboardInner');
-      if(boardElNow) boardElNow.innerHTML = board.length? board.map((r,i)=> leaderboardRowHTML(r.profile, i, r.profile===me)).join('') : `<div class="hint">No other hunters found yet.</div>`;
+      if(boardElNow){
+        boardElNow.innerHTML = pageBoard.length? pageBoard.map((r,i)=> leaderboardRowHTML(r.profile, globalPage*GLOBAL_PAGE_SIZE+i, r.profile===me)).join('') : `<div class="hint">No other hunters found yet.</div>`;
+        boardElNow.querySelectorAll('[data-highest-idx]').forEach(row=>{
+          const idx = Number(row.dataset.highestIdx) - globalPage*GLOBAL_PAGE_SIZE;
+          const pr = pageBoard[idx] && pageBoard[idx].profile;
+          if(pr && pr.highest) row.addEventListener('click', ()=> openDetailModal(pr.highest, false, false));
+        });
+      }
       return; // Friends section doesn't render in Global mode
     }
     if(!listEl) return;
@@ -4329,7 +4425,7 @@ function renderBag(panel){
     if(hasExpensive){
       showConfirm(`You're selling a lot of expensive items, some are very valuable.<br>Current Value: ${formatCoins(total)}`, doSell, {hazard:true, confirmLabel:"Yes I'm sure"});
     } else {
-      showConfirm(`Sell everything in your bag for ${formatCoins(total)} coins? This can't be undone.`, doSell);
+      showConfirm(`Sell everything in your bag for ${formatCoins(total)} coins? This can't be undone.`, doSell, {hazard:true, confirmLabel:"Yes, sell it all"});
     }
   });
   const totalPages = Math.max(1, Math.ceil(owned.length/BAG_PAGE_SIZE));
