@@ -1289,7 +1289,7 @@ function showDecryptAnimation(boss){
       document.getElementById('decryptActions').style.display='flex';
       document.getElementById('decryptCloseRow').style.display='flex';
       sfxCoin();
-      document.getElementById('decryptCopyBtn').addEventListener('click', ()=> copyText(code, "Code copied! Paste it into the Scanner when you're ready."));
+      document.getElementById('decryptCopyBtn').addEventListener('click', ()=> copyText(code, "Code copied! Paste it into the Scanner when you're ready.", "Couldn't copy automatically - long-press the code above to select and copy it manually"));
       document.getElementById('decryptCloseBtn').addEventListener('click', ()=> overlay.remove());
     }
   }, 90);
@@ -2623,6 +2623,9 @@ function showSettingsModal(){
       const fresh = { coins: 20, collection: [], discarded: [], owned: {}, inventory: {}, almanac: {}, itemsTaken: [], activeBoosts: {}, hunterXP: 0, activeBoss: null, settings: state.settings, scannerCustomization: state.scannerCustomization, achievementTierAwarded: {}, dailyLogin: { lastClaim:null, streak:0 }, arenaSkipCount:0, arenaSkipCooldownUntil:0, freeAdBoostCooldownUntil:0, eggs: [], battlesSinceBoss:0, lifetimeBattlesTowardBoss:0, stats: { totalFights:0, totalWins:0, totalLosses:0, currentStreak:0, bestStreak:0, highestFought:null, discoveryDates:{}, bossesEncountered:0, bossWins:0, bossDefeats:0, strongestBossLevel:0, oneHitKOs:0, lifetimeCoins:0, eggsHatched:0 } };
       state = fresh;
       saveState();
+      document.body.classList.remove('vs-tab-active'); // re-evaluated below against fresh state, but this one has no tab context to derive it from, so just clear it - showOnboarding() moves us off the VS tab regardless
+      document.body.classList.toggle('egg3-bt-done', easterEggStepDone('egg3','a'));
+      document.body.classList.toggle('egg3-coin-done', easterEggStepDone('egg3','c'));
       showToast("Progress reset");
       renderTab();
       maybeShowOnboarding();
@@ -2681,7 +2684,7 @@ function showExportModal(){
     <div class="buttons-row"><button class="btn cream small full" id="exportCloseBtn">Close</button></div>
   </div>`;
   document.body.appendChild(overlay);
-  document.getElementById('exportCopyBtn').addEventListener('click', ()=> copyText(code, 'Save code copied!'));
+  document.getElementById('exportCopyBtn').addEventListener('click', ()=> copyText(code, 'Save code copied!', "Couldn't copy automatically - long-press the code above to select and copy it manually"));
   document.getElementById('exportCloseBtn').addEventListener('click', ()=> overlay.remove());
 }
 function showImportModal(){
@@ -3791,9 +3794,9 @@ function legacyCopy(text){
 function escapeHtml(str){
   return String(str==null?'':str).replace(/[&<>"']/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-function copyText(text, okMsg){
+function copyText(text, okMsg, failMsg){
   const done = ()=> showToast(okMsg);
-  const fail = ()=> showToast("Couldn't copy here - try again once this is open in a full browser tab");
+  const fail = ()=> showToast(failMsg || "Couldn't copy here - try again once this is open in a full browser tab");
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(done).catch(()=> legacyCopy(text)?done():fail());
   } else { legacyCopy(text)?done():fail(); }
@@ -5804,24 +5807,25 @@ function showOnboarding(){
 function typeLines(lines, el, onDone){
   el.innerHTML=''; let li=0; let skip=false;
   const skipNow = ()=>{ skip=true; };
-  el.addEventListener('click', skipNow);
+  document.addEventListener('click', skipNow);
   const typeNext = ()=>{
     if(li>=lines.length){
-      el.removeEventListener('click', skipNow);
+      document.removeEventListener('click', skipNow);
       const prompt = document.createElement('div');
       prompt.className = 'pixel sm prompt-pulse';
       prompt.style.cssText = 'text-align:center; margin-top:14px;';
       prompt.textContent = 'Tap to continue';
       el.appendChild(prompt);
-      const goNow = ()=>{ el.removeEventListener('click', goNow); onDone(); };
-      el.addEventListener('click', goNow);
+      el.scrollTop = el.scrollHeight;
+      const goNow = ()=>{ document.removeEventListener('click', goNow); onDone(); };
+      document.addEventListener('click', goNow);
       return;
     }
     const line=lines[li]; let ci=0;
     const lineEl=document.createElement('div'); lineEl.style.marginBottom='8px'; el.appendChild(lineEl);
     const typeChar = ()=>{
-      if(skip){ lineEl.textContent=line; li++; skip=false; setTimeout(typeNext,250); return; }
-      if(ci<=line.length){ lineEl.textContent=line.slice(0,ci); ci++; setTimeout(typeChar,16); }
+      if(skip){ lineEl.textContent=line; li++; skip=false; el.scrollTop = el.scrollHeight; setTimeout(typeNext,250); return; }
+      if(ci<=line.length){ lineEl.textContent=line.slice(0,ci); ci++; el.scrollTop = el.scrollHeight; setTimeout(typeChar,32); }
       else { li++; setTimeout(typeNext,350); }
     };
     typeChar();
