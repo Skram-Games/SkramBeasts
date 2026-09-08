@@ -1,0 +1,11 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "io.github.skram_games.twa",
+    "sha256_cert_fingerprints": [
+      "FF:15:E7:60:09:D8:BF:96:1E:54:E1:05:CB:52:F3:7E:27:15:0B:B9:8B:BA:6C:9F:94:D2:83:AB:0D:FE:0A:89"
+    ]
+  }
+}]
+
