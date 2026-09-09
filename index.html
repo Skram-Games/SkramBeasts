@@ -247,6 +247,7 @@
   .boost-badge{font-family:'Baloo 2',sans-serif; font-weight:800; font-size:10px; background:#9B5DE5; color:#fff; border-radius:999px; padding:4px 9px;}
   .tile-boosts{position:absolute; bottom:-6px; left:-6px; display:flex; flex-direction:column; gap:1px;}
   .tile-trophy{position:absolute; top:-6px; right:-6px; background:#fff; border:1.5px solid #1A1F1C; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center;}
+  .tile-resting{position:absolute; bottom:2px; left:2px; right:2px; background:rgba(26,31,28,.85); color:#fff; font-size:8px; font-weight:700; text-align:center; border-radius:5px; padding:2px 0;}
   .tile-boost{background:#9B5DE5; color:#fff; font-family:'Baloo 2',sans-serif; font-weight:800; font-size:6.5px; border-radius:5px; padding:1px 3px; line-height:1.3;}
 
   /* Log (Almanac) - text-forward list, not tiles */
@@ -305,7 +306,8 @@
   .numpad-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px;}
   .team-chips{display:flex; gap:5px; flex-wrap:wrap; margin:6px 0;}
   .arena-roster{display:flex; justify-content:space-between; gap:4px; margin-top:6px;}
-  .arena-roster-icon{flex:1 1 0; display:flex; flex-direction:column; align-items:center; gap:2px; background:#fff; border-radius:10px; padding:5px 2px; cursor:pointer; border:2px solid transparent; box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  .arena-roster-icon{flex:1 1 0; display:flex; flex-direction:column; align-items:center; gap:2px; background:#fff; border-radius:10px; padding:5px 2px; cursor:pointer; border:2px solid transparent; box-shadow:0 1px 3px rgba(0,0,0,.12); position:relative;}
+  .tile-type-badge{position:absolute; top:-6px; left:-6px; background:#fff; border:1.5px solid #1A1F1C; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center;}
   .arena-roster-icon.selected{border-color:var(--coral);}
   .arena-roster-icon.tired{opacity:.4; cursor:default;}
   .vs-illustration{display:grid; grid-template-columns:1fr 1fr 1fr; align-items:center; height:66px; margin-top:14px; margin-bottom:0;}
@@ -374,7 +376,7 @@
   @keyframes floaty{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
 
   .result-banner{font-family:'Baloo 2',sans-serif; font-weight:800; font-size:19px; text-align:center; margin:8px 0 2px; animation:celebrate .5s ease-out;}
-  .result-banner.win{color:#E8542E; text-shadow:2px 2px 0 #7a2a10;}
+  .result-banner.win{color:#E8542E; font-size:24px; text-shadow:2px 2px 0 #F2C13D, -2px -2px 0 #F2C13D, 2px -2px 0 #F2C13D, -2px 2px 0 #F2C13D, 0 0 14px rgba(232,84,46,.65);}
   .result-banner.lose{color:#4a4a4a; text-shadow:1.5px 1.5px 0 rgba(255,255,255,.5);}
   @keyframes celebrate{0%{transform:scale(.4); opacity:0;}60%{transform:scale(1.15); opacity:1;}100%{transform:scale(1); opacity:1;}}
   .confetti-wrap{position:relative; height:0;}
@@ -529,6 +531,13 @@ function achievementIcon(key){
     case 'crownCollector': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 18 L4 9 L8 13 L12 5 L16 13 L20 9 L20 18 Z" fill="#fff" stroke="#1A1F1C" stroke-width="1.2"/></svg>`;
     case 'overflowing': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 4h12l-1.5 12a4 4 0 01-4 3.5h-1a4 4 0 01-4-3.5z" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="12" cy="2" r="1.4" fill="#fff"/><circle cx="8" cy="1.5" r="1" fill="#fff" opacity=".7"/><circle cx="16" cy="1.5" r="1" fill="#fff" opacity=".7"/></svg>`;
     case 'globalAce': return `<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="10" cy="10" r="7" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M3 10h14M10 3a10 10 0 010 14M10 3a10 10 0 000 14" stroke="#fff" stroke-width="1" fill="none"/><path d="M18 14l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z" fill="#fff" stroke="#1A1F1C" stroke-width="0.8"/></svg>`;
+    case 'typeEmber': return typeIcon('ember', 20);
+    case 'typeAqua': return typeIcon('aqua', 20);
+    case 'typeVolt': return typeIcon('volt', 20);
+    case 'typeBloom': return typeIcon('bloom', 20);
+    case 'typeShadow': return typeIcon('shadow', 20);
+    case 'typeCrystal': return typeIcon('crystal', 20);
+    case 'timeInvested': return `<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="1.8"/><line x1="12" y1="12" x2="12" y2="6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><line x1="12" y1="12" x2="16" y2="14" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`;
     default: return '';
   }
 }
@@ -556,6 +565,12 @@ function sfxCaptureSuccess(){ [523,659,784,1047].forEach((f,i)=> tone(f,0.14,'tr
 function sfxCaptureFail(){ tone(300,0.25,'sawtooth',0.1,0); tone(200,0.3,'sawtooth',0.08,0.1); }
 function sfxHit(){ tone(150,0.08,'square',0.14,0); }
 function sfxCoin(){ tone(880,0.09,'triangle',0.13,0); tone(1320,0.11,'triangle',0.12,0.07); }
+function sfxEggTap(){ tone(1400,0.045,'square',0.07,0); }
+function sfxFireworks(){
+  [0,0.12,0.22].forEach(delay=>{ tone(180+Math.random()*60,0.05,'square',0.1,delay); tone(1000+Math.random()*400,0.09,'triangle',0.09,delay+0.03); });
+  [1568,1976,2349,2637].forEach((f,i)=> tone(f,0.16,'triangle',0.1,0.36+i*0.07));
+}
+function sfxPotionEquip(){ tone(520,0.08,'sawtooth',0.09,0); tone(420,0.08,'sawtooth',0.08,0.07); tone(700,0.12,'triangle',0.1,0.15); }
 function sfxShoo(){
   const ctx = ensureAudio(); if(!ctx) return;
   const osc = ctx.createOscillator(), gain = ctx.createGain();
@@ -742,7 +757,7 @@ async function storageDelete(key, shared){
   catch(e){ return null; }
 }
 
-let state = { coins: 20, collection: [], discarded: [], owned: {}, inventory: {}, almanac: {}, itemsTaken: [], activeBoosts: {}, hunterXP: 0, activeBoss: null, settings: { soundEffects:true, reducedMotion:false, colorblindSafe:false, highContrast:false, lightMode:false, autoFighter:false }, scannerCustomization: { shell:'teal', laser:'red', orientation:'horizontal' }, achievementTierAwarded: {}, dailyLogin: { lastClaim:null, streak:0 }, arenaSkipCount:0, arenaSkipCooldownUntil:0, freeAdBoostCooldownUntil:0, eggs: [], battlesSinceBoss:0, lifetimeBattlesTowardBoss:0, easterEggsFound: [], easterEggSteps: {}, stats: { totalFights:0, totalWins:0, totalLosses:0, currentStreak:0, bestStreak:0, highestFought:null, discoveryDates:{}, bossesEncountered:0, bossWins:0, bossDefeats:0, strongestBossLevel:0, oneHitKOs:0, lifetimeCoins:0, eggsHatched:0 } };
+let state = { coins: 20, collection: [], discarded: [], owned: {}, inventory: {}, almanac: {}, itemsTaken: [], activeBoosts: {}, hunterXP: 0, activeBoss: null, settings: { soundEffects:true, reducedMotion:false, colorblindSafe:false, highContrast:false, lightMode:false, autoFighter:false }, scannerCustomization: { shell:'teal', laser:'red', orientation:'horizontal' }, achievementTierAwarded: {}, dailyLogin: { lastClaim:null, streak:0 }, arenaSkipCount:0, arenaSkipCooldownUntil:0, freeAdBoostCooldownUntil:0, eggs: [], battlesSinceBoss:0, lifetimeBattlesTowardBoss:0, easterEggsFound: [], easterEggSteps: {}, stats: { totalFights:0, totalWins:0, totalLosses:0, currentStreak:0, bestStreak:0, highestFought:null, discoveryDates:{}, bossesEncountered:0, bossWins:0, bossDefeats:0, strongestBossLevel:0, oneHitKOs:0, lifetimeCoins:0, eggsHatched:0, totalPlayTimeMs:0 } };
 function trackBattleResult(won, opponent){
   const s = state.stats;
   s.totalFights++;
@@ -828,6 +843,12 @@ async function loadState(){
       navigator.serviceWorker.register('sw.js').catch(()=>{ /* not fatal - the app works fine without offline support */ });
     });
   }
+  setInterval(()=>{
+    if(document.visibilityState==='visible'){
+      state.stats.totalPlayTimeMs = (state.stats.totalPlayTimeMs||0) + 30000;
+      saveState();
+    }
+  }, 30000);
 }
 function setupEasterEgg2Triggers(){
   document.body.classList.toggle('egg3-coin-done', easterEggStepDone('egg3','c'));
@@ -946,16 +967,18 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '1.97';
+const FIRMWARE_VERSION = '1.98';
 const FIRMWARE_CHANGELOG = [
-  'Equipped gear (weapons, armour, party hats) now actually shows when viewing a friend\'s or leaderboard player\'s Skrambeast',
-  'Fixed a serious bug where pairing codes could corrupt your own username - Change Username moved to Settings',
-  'Boss Training rest time corrected to 2 minutes (was accidentally 5) - added a "Battle Again" button',
-  'Global Leaderboard: clicking any player now reliably opens their full profile',
-  'Queen battle win-chance is now a genuine estimate, not a rough guess - applies to Wild Queens and Boss Training alike',
-  'All scanner skins now a flat 15,000 coins',
-  'Store item pop-ups show real extra detail instead of repeating the same line',
-  'Redesigned monster renaming with a clearer pencil-icon flow',
+  'Battle win messages are bigger and more eye-catching',
+  'Squad tab now shows a Resting badge on tired Skrambeasts',
+  'Egg ad-reductions capped at 5 per egg',
+  'Boss Training now shows the Queen\'s full stats',
+  'Rank ribbons rounded and given a bit more depth',
+  'Achievement pop-ups wait a beat before appearing mid-battle, so you don\'t miss them',
+  'Arena roster tiles now show each Skrambeast\'s type',
+  'New: Total Time Played stat, plus discovery stats and achievements for all six types',
+  'A few new sounds - egg tapping, hatching, and using a potion',
+  '4 new Game Secrets to find',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1890,6 +1913,13 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'showingOff', name:"Now You're Just Showing Off", desc:'Equip each unique party hat colour', guide:'Equip a different coloured Party Hat on a different Skrambeast for every colour you own, all at the same time.', getValue: ()=> new Set(state.collection.filter(m=>m.costume && m.costume.startsWith('partyHat')).map(m=>m.costume)).size, tiers:[2,3,4,5,6]},
   {key:'crownCollector', name:'Crown Collector', desc:"Collect Queen's Crowns", guide:"Defeat wild Queens for a chance at her Crown - a rare trophy drop, roughly 1 in 8 kills. It can't be sold, only traded, so hoard them or deal them away.", getValue: ()=> state.inventory['queensCrown']||0, tiers:[1,2,3,5,10]},
   {key:'overflowing', name:'Overflowing', desc:'Redirect surplus battle XP', guide:"Once every favourited Skrambeast is at its level cap, battle XP has nowhere left to go - it redirects into Hunter Rank instead, then into coins once that's maxed too. Keep battling with a fully maxed squad to trigger this.", getValue: ()=> state.stats.xpOverflowCount||0, tiers:[1,10,50,200,1000]},
+  {key:'typeEmber', name:'Playing with Fire', desc:'Discover Ember-type Skrambeasts', guide:'Discover Skrambeasts of the Ember type - keep an eye out for the flame icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='ember' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
+  {key:'typeAqua', name:'Making Waves', desc:'Discover Aqua-type Skrambeasts', guide:'Discover Skrambeasts of the Aqua type - keep an eye out for the droplet icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='aqua' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
+  {key:'typeVolt', name:"It's Just Static", desc:'Discover Volt-type Skrambeasts', guide:'Discover Skrambeasts of the Volt type - keep an eye out for the lightning bolt icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='volt' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
+  {key:'typeBloom', name:'Green Thumb', desc:'Discover Bloom-type Skrambeasts', guide:'Discover Skrambeasts of the Bloom type - keep an eye out for the leaf icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='bloom' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
+  {key:'typeShadow', name:'Creature of the Dark', desc:'Discover Shadow-type Skrambeasts', guide:'Discover Skrambeasts of the Shadow type - keep an eye out for the crescent icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='shadow' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
+  {key:'typeCrystal', name:'Diamond in the Rough', desc:'Discover Crystal-type Skrambeasts', guide:'Discover Skrambeasts of the Crystal type - keep an eye out for the gem icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='crystal' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
+  {key:'timeInvested', name:'Time Well Spent', desc:'Total time played', guide:'Just keep playing - this one ticks up on its own the longer the app stays open in front of you.', getValue: ()=> Math.floor((state.stats.totalPlayTimeMs||0)/3600000), tiers:[1,5,20,60,150]},
   {key:'globalAce', name:'Global Ace', desc:"Rank on the Global leaderboard", guide:"Open Friends > Global to see how you stack up against every hunter, not just your friends. Earning more Hunter XP climbs you higher - the top 20 make the board at all.", getValue: ()=> state.stats.bestGlobalRank ? Math.max(0, 21-state.stats.bestGlobalRank) : 0, tiers:[1,11,16,18,20]},
 ];
 function achievementsUnlockedCount(){
@@ -1920,7 +1950,7 @@ function checkAchievements(){
     const wasEmpty = achievementPopupQueue.length===0;
     if(wasEmpty) achievementDoubleUsedThisBatch = false; // fresh batch starting - reset the one-ad-per-sitting allowance
     achievementPopupQueue.push(...newlyUnlocked);
-    if(wasEmpty) showNextAchievementPopup();
+    if(wasEmpty) setTimeout(showNextAchievementPopup, 700); // gives the player's tap reflexes from battle a moment to settle before anything pops up
   }
 }
 function showNextAchievementPopup(){
@@ -2085,15 +2115,16 @@ function miniRankBadge(rank){
 }
 function rankRibbonSVG(rank, width){
   const w = width||300, h = Math.round(w*0.16);
+  const r = Math.min(9, h/2);
   const hatch = [];
   for(let i=-h; i<w; i+=6){ hatch.push(`<line x1="${i}" y1="${h}" x2="${i+h}" y2="0" stroke="#000" stroke-width="1" opacity=".22"/>`); }
   for(let i=-h; i<w; i+=6){ hatch.push(`<line x1="${i}" y1="0" x2="${i+h}" y2="${h}" stroke="#fff" stroke-width="1" opacity=".18"/>`); }
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;">
-    <rect x="0" y="0" width="${w}" height="${h}" fill="${rank.color}"/>
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;border-radius:${r}px;box-shadow:0 1px 3px rgba(0,0,0,.12);">
+    <rect x="0" y="0" width="${w}" height="${h}" rx="${r}" fill="${rank.color}"/>
     <g clip-path="url(#ribbonClip-${rank.name.replace(/[^a-zA-Z0-9]/g,'')})">${hatch.join('')}</g>
-    <clipPath id="ribbonClip-${rank.name.replace(/[^a-zA-Z0-9]/g,'')}"><rect x="0" y="0" width="${w}" height="${h}"/></clipPath>
-    <rect x="0" y="0" width="${w}" height="${h}" fill="none" stroke="#1A1F1C" stroke-width="2"/>
-    <rect x="1.5" y="1.5" width="${w-3}" height="${h-3}" fill="none" stroke="#fff" stroke-width="1" opacity=".3"/>
+    <clipPath id="ribbonClip-${rank.name.replace(/[^a-zA-Z0-9]/g,'')}"><rect x="0" y="0" width="${w}" height="${h}" rx="${r}"/></clipPath>
+    <rect x="0" y="0" width="${w}" height="${h}" rx="${r}" fill="none" stroke="#1A1F1C" stroke-width="2"/>
+    <rect x="1.5" y="1.5" width="${w-3}" height="${h-3}" rx="${Math.max(0,r-1.5)}" fill="none" stroke="#fff" stroke-width="1" opacity=".3"/>
   </svg>`;
 }
 function hunterRankIndex(xp){ let idx=0; for(let i=0;i<HUNTER_RANKS.length;i++){ if(xp>=HUNTER_RANKS[i].xp) idx=i; } return idx; }
@@ -2699,7 +2730,7 @@ function showSettingsModal(){
   document.getElementById('settingsResetBtn').addEventListener('click', ()=>{
     showConfirm("Reset ALL progress? This deletes your whole Squad, coins, stats and secrets. This can't be undone.", ()=>{
       overlay.remove();
-      const fresh = { coins: 20, collection: [], discarded: [], owned: {}, inventory: {}, almanac: {}, itemsTaken: [], activeBoosts: {}, hunterXP: 0, activeBoss: null, settings: state.settings, scannerCustomization: state.scannerCustomization, achievementTierAwarded: {}, dailyLogin: { lastClaim:null, streak:0 }, arenaSkipCount:0, arenaSkipCooldownUntil:0, freeAdBoostCooldownUntil:0, eggs: [], battlesSinceBoss:0, lifetimeBattlesTowardBoss:0, stats: { totalFights:0, totalWins:0, totalLosses:0, currentStreak:0, bestStreak:0, highestFought:null, discoveryDates:{}, bossesEncountered:0, bossWins:0, bossDefeats:0, strongestBossLevel:0, oneHitKOs:0, lifetimeCoins:0, eggsHatched:0 } };
+      const fresh = { coins: 20, collection: [], discarded: [], owned: {}, inventory: {}, almanac: {}, itemsTaken: [], activeBoosts: {}, hunterXP: 0, activeBoss: null, settings: state.settings, scannerCustomization: state.scannerCustomization, achievementTierAwarded: {}, dailyLogin: { lastClaim:null, streak:0 }, arenaSkipCount:0, arenaSkipCooldownUntil:0, freeAdBoostCooldownUntil:0, eggs: [], battlesSinceBoss:0, lifetimeBattlesTowardBoss:0, stats: { totalFights:0, totalWins:0, totalLosses:0, currentStreak:0, bestStreak:0, highestFought:null, discoveryDates:{}, bossesEncountered:0, bossWins:0, bossDefeats:0, strongestBossLevel:0, oneHitKOs:0, lifetimeCoins:0, eggsHatched:0, totalPlayTimeMs:0 } };
       state = fresh;
       saveState();
       document.body.classList.remove('vs-tab-active'); // re-evaluated below against fresh state, but this one has no tab context to derive it from, so just clear it - showOnboarding() moves us off the VS tab regardless
@@ -2893,7 +2924,7 @@ function renderEggsPanel(panel){
     });
     const adRow = document.getElementById('eggAdRow');
     if(adRow){
-      const waitingEggs = eggs.map((e,i)=>({e,i})).filter(x=> Date.now()<x.e.readyAt);
+      const waitingEggs = eggs.map((e,i)=>({e,i})).filter(x=> Date.now()<x.e.readyAt && (x.e.adsUsed||0)<MAX_EGG_AD_REDUCTIONS);
       adRow.innerHTML = waitingEggs.length
         ? `<div class="buttons-row" style="margin-top:8px;"><button class="btn yolk small full" id="eggAdBtn">Watch Ad to Reduce Incubation Time</button></div>`
         : '';
@@ -2916,14 +2947,17 @@ function renderEggsPanel(panel){
     });
   }, 1000);
 }
+const MAX_EGG_AD_REDUCTIONS = 5;
 function reduceEggTime(index, onDone){
   const egg = state.eggs[index];
   if(!egg || Date.now()>=egg.readyAt) return;
+  if((egg.adsUsed||0) >= MAX_EGG_AD_REDUCTIONS){ showToast("This egg has already used its 5 ad reductions"); return; }
   showRewardedAd(()=>{
     const remaining = egg.readyAt - Date.now();
     egg.readyAt = Date.now() + Math.floor(remaining/2);
+    egg.adsUsed = (egg.adsUsed||0)+1;
     saveState();
-    showToast("Ad watch complete - incubation time reduced!");
+    showToast(`Ad watch complete - incubation time reduced! (${egg.adsUsed}/${MAX_EGG_AD_REDUCTIONS} used)`);
     onDone();
   });
 }
@@ -2938,7 +2972,7 @@ function showEggPicker(waitingEggs, onDone){
   document.body.appendChild(overlay);
   document.getElementById('eggPickerList').innerHTML = waitingEggs.map(({e,i})=> `<div class="store-item" data-pick-idx="${i}" style="cursor:pointer;">
     <div style="width:26px;height:26px;">${eggSVG(e.barcode,26)}</div>
-    <div class="sinfo"><div class="sname">Mystery Egg</div><div class="sdesc">Ready in ${eggCountdownLabel(e.readyAt-Date.now())}</div></div>
+    <div class="sinfo"><div class="sname">Mystery Egg</div><div class="sdesc">Ready in ${eggCountdownLabel(e.readyAt-Date.now())} · ${MAX_EGG_AD_REDUCTIONS-(e.adsUsed||0)} ad reduction${MAX_EGG_AD_REDUCTIONS-(e.adsUsed||0)===1?'':'s'} left</div></div>
   </div>`).join('');
   document.getElementById('eggPickerCancel').addEventListener('click', ()=> overlay.remove());
   document.querySelectorAll('#eggPickerList [data-pick-idx]').forEach(row=>{
@@ -2983,7 +3017,7 @@ function openEggHatchPopup(index, panel){
     if(resolved) return;
     eggHatchTaps++;
     cracksEl.innerHTML = eggCrackOverlay(Math.floor(eggHatchTaps/EGG_HATCH_TAPS_NEEDED*4));
-    sfxHit();
+    sfxEggTap();
     if(eggHatchTaps>=wiggleDue){
       artwork.classList.remove('egg-wiggle'); void artwork.offsetWidth; artwork.classList.add('egg-wiggle');
       wiggleDue += 4 + Math.floor(Math.random()*2);
@@ -3009,7 +3043,7 @@ function completeEggHatch(index, panel, overlay){
     state.eggs.splice(index,1);
     state.stats.eggsHatched = (state.stats.eggsHatched||0)+1;
     incrementQuestProgress('hatchEgg');
-    saveState(); checkAchievements(); sfxCaptureSuccess();
+    saveState(); checkAchievements(); sfxFireworks();
     setTimeout(()=>{
       flash.style.opacity='0';
       setTimeout(()=> flash.remove(), 250);
@@ -3691,7 +3725,7 @@ function renderSquadGrid(panel){
       const it = BOOST_ITEMS.find(x=>x.key===b.key);
       return it ? `<span class="tile-boost">${it.badge}</span>` : '';
     }).join('') : '';
-    tile.innerHTML = `<button class="tile-star">${iconStar(m.favorite)}</button><div class="tile-lvl">${m.level}</div><div class="tile-icon">${monsterSVG(m,34)}</div>${boostBadgeStr?`<div class="tile-boosts">${boostBadgeStr}</div>`:''}${isMaxed(m)?`<div class="tile-trophy">${iconTrophy(12,rs.color)}</div>`:''}`;
+    tile.innerHTML = `<button class="tile-star">${iconStar(m.favorite)}</button><div class="tile-lvl">${m.level}</div><div class="tile-icon" style="${isTired(m)?'opacity:.45;':''}">${monsterSVG(m,34)}</div>${boostBadgeStr?`<div class="tile-boosts">${boostBadgeStr}</div>`:''}${isMaxed(m)?`<div class="tile-trophy">${iconTrophy(12,rs.color)}</div>`:''}${isTired(m)?`<div class="tile-resting">😴 Resting</div>`:''}`;
     tile.querySelector('.tile-star').addEventListener('click', e=>{ e.stopPropagation(); toggleFavorite(m); renderSquadGrid(panel); });
     tile.addEventListener('click', ()=> openDetailModal(m, true));
     grid.appendChild(tile);
@@ -3922,7 +3956,7 @@ function renderModalActions(container, m, overlay, allowEquip){
     else if(p.effect==='buffHp'){ m.buffNextBattle=Object.assign({},m.buffNextBattle,{hp:1.3}); }
     else if(p.effect==='buffFocus'){ m.buffNextBattle=Object.assign({},m.buffNextBattle,{power:1.25,guard:1.25}); }
     else if(p.effect==='phoenix'){ m.tiredUntil=0; m.restTotalMs=0; m.buffNextBattle=Object.assign({},m.buffNextBattle,{power:3.5}); }
-    saveState(); renderModalActions(container,m,overlay); showToast(`${p.name} used on ${m.name}`);
+    saveState(); renderModalActions(container,m,overlay); showToast(`${p.name} used on ${m.name}`); sfxPotionEquip();
   }));
   refreshModalVisuals(m);
 }
@@ -4394,6 +4428,10 @@ const GAME_SECRETS = [
   "Each of your three Daily Quests comes from a different category, so you'll never see two versions of the same task on the same day.",
   "One of the hidden eggs needs exactly 3 separate things done before it shows itself. Order doesn't matter, but all three do.",
   "There's a charm that makes the last one look like a starter kit - same idea, dialled up considerably further.",
+  "Letting a Legendary go isn't a single tap. The game makes very sure you meant it - twice.",
+  "Somewhere in Settings, a toggle exists that calms the whole shell down - no bounce, no shimmer, no confetti. Some players prefer the quiet.",
+  "Every so often, a Skrambeast comes out looking just a little different from its own kind - same everything else, just a shinier coat. Nobody knows the odds. They're just rare.",
+  "Level caps rise in neat steps of 30 all the way up: Common tops out at 30, Uncommon at 60, Rare at 90, Epic at 120, Legendary at 150.",
   "A tired Skrambeast is easier to beat and less reliable in a fight - rotate your squad instead of pushing through.",
   "Somewhere beyond seven figures sits a blade that makes your best current weapon look like the first one you ever bought.",
   "Scanner Upgrades boost your odds when trying to catch something new - stack them before you commit.",
@@ -4534,6 +4572,14 @@ function renderEncyclopedia(container){
   document.getElementById('encPrev').addEventListener('click', ()=>{ if(encyclopediaPage===0) return; encyclopediaPage=Math.max(0,encyclopediaPage-1); renderEncyclopedia(container); });
   document.getElementById('encNext').addEventListener('click', ()=>{ if(encyclopediaPage>=totalPages-1) return; encyclopediaPage=Math.min(totalPages-1,encyclopediaPage+1); renderEncyclopedia(container); });
 }
+function formatPlayTime(ms){
+  const totalMin = Math.floor(ms/60000);
+  if(totalMin<60) return `${totalMin}m`;
+  const totalHr = Math.floor(totalMin/60);
+  if(totalHr<24) return `${totalHr}h ${totalMin%60}m`;
+  const days = Math.floor(totalHr/24);
+  return `${days}d ${totalHr%24}h`;
+}
 let statsPage = 0;
 function renderStatsPanel(container, panel){
   const s = state.stats;
@@ -4571,6 +4617,14 @@ function renderStatsPanel(container, panel){
         ${row('Boss Training Wins', s.bossTrainingWins||0, '#3f6b4a')}
         ${row('Boss defeats', s.bossDefeats, '#a13a24')}
         ${row('Strongest boss level', s.strongestBossLevel||'-', '#D4A017')}`;
+    },
+    ()=>{
+      const byType = TYPES.map(t=> ({t, count: Object.values(state.almanac).filter(e=>e.type===t.key && !e.barcode.startsWith('arena-')).length}));
+      return `
+        <div class="section-label">Discovered by Type</div>
+        ${byType.map(x=> row(x.t.label, x.count, x.t.color)).join('')}
+        <div class="section-label" style="margin-top:8px;">Time</div>
+        ${row('Total Time Played', formatPlayTime(s.totalPlayTimeMs||0), '#9B5DE5')}`;
     }
   ];
   const totalPages = pages.length;
@@ -5160,6 +5214,7 @@ function renderBossTrainingPrep(container, trainingBoss){
       <div class="pixel sm" style="color:#a13a24;">${trainingBoss.name}</div>
       <div class="float" style="width:90px;height:90px;margin:6px auto;display:flex;justify-content:center;align-items:center;">${monsterSVG(trainingBoss,90)}</div>
       <div class="pixel sm">Lv.${trainingBoss.level}</div>
+      <div class="stat-row" style="justify-content:center;margin-top:4px;">${statLine(trainingBoss.stats)}</div>
     </div>
     ${ready ? `<div style="display:flex;justify-content:flex-end;margin-bottom:4px;"><div style="background:${chanceColor};color:#fff;font-family:'Press Start 2P',monospace;font-size:8px;padding:4px 6px;border-radius:6px;white-space:nowrap;">${chance}% Chance of Win</div></div>` : ''}
     ${ready
@@ -5512,6 +5567,7 @@ function renderArenaRoster(container, outerContainer){
   container.innerHTML = favs.map(m=>{
     const tired = isTired(m);
     return `<div class="arena-roster-icon${selectedArenaFighterId===m.id?' selected':''}${tired?' tired':''}" data-fighter-id="${m.id}">
+      <div class="tile-type-badge">${typeIcon(m.type,13)}</div>
       <div style="width:28px;height:28px;">${monsterSVG(m,28)}</div>
       <span class="pixel sm">Lv.${m.level}</span>
     </div>`;
