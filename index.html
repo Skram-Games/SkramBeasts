@@ -266,7 +266,7 @@
 
   /* Detail modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(10,14,12,.65); display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;}
-  .modal-box{background:var(--cream); border-radius:16px; padding:16px; width:100%; max-width:340px; max-height:88vh; overflow-y:auto; position:relative; box-shadow:0 20px 50px rgba(0,0,0,.4);}
+  .modal-box{background:var(--cream); border-radius:16px; padding:16px; width:100%; max-width:340px; max-height:88vh; overflow-y:auto; position:relative; box-shadow:0 20px 50px rgba(0,0,0,.4); margin-top:-64px;}
   .modal-close{position:absolute; top:10px; right:10px; background:#fff; border:1.5px solid #0d2027; border-radius:50%; width:26px; height:26px; display:flex; align-items:center; justify-content:center; cursor:pointer;}
   .modal-name{display:block; margin:4px auto 0; text-align:center; font-family:'Baloo 2'; font-weight:700; font-size:15px; border:none; background:transparent; width:80%;}
   .xp-bar{width:80%; margin:6px auto 0; height:7px; background:#ddd; border-radius:4px; overflow:hidden;}
@@ -353,8 +353,8 @@
   .rain-drop{ position:absolute; top:-5%; width:2px; height:16px; background:linear-gradient(180deg, transparent, rgba(80,160,230,.8)); animation:rainFall linear infinite; }
   @keyframes rainFall{0%{transform:translateY(0);}100%{transform:translateY(110vh);}}
   body.reduced-motion .rain-drop{ animation:none !important; opacity:0 !important; }
-  body.vs-tab-active .btn.yolk{ transition:background 3s ease, color 3s ease; }
-  body.vs-tab-active.egg3-bt-done .btn.yolk{ background:#4E8FD1 !important; color:#fff !important; }
+  body.vs-tab-active .vs-menu-btn{ transition:background 3s ease, color 3s ease; }
+  body.vs-tab-active.egg3-bt-done .vs-menu-btn{ background:#4E8FD1 !important; color:#fff !important; }
   .firework-burst{ position:absolute; width:0; height:0; }
   .firework-particle{ position:absolute; width:6px; height:6px; border-radius:50%; opacity:0; animation:fireworkPop 1.1s ease-out forwards; transform:rotate(var(--angle)) translateX(0); }
   @keyframes fireworkPop{0%{opacity:1; transform:rotate(var(--angle)) translateX(0); }100%{opacity:0; transform:rotate(var(--angle)) translateX(70px); }}
@@ -783,6 +783,7 @@ function showDailyLoginPopup(streak, todayKey){
   let resolved = false;
   document.getElementById('dailyClaimBtn').addEventListener('click', ()=>{
     if(resolved) return; resolved = true;
+    document.getElementById('dailyDoubleBtn').disabled = true;
     addCoins(reward);
     state.dailyLogin = { lastClaim: todayKey, streak };
     saveState(); sfxCoin();
@@ -792,6 +793,7 @@ function showDailyLoginPopup(streak, todayKey){
     if(resolved) return;
     const btn = document.getElementById('dailyDoubleBtn');
     btn.disabled = true; btn.textContent = 'Watching ad...';
+    document.getElementById('dailyClaimBtn').disabled = true;
     showRewardedAd(()=>{
       if(resolved) return;
       resolved = true;
@@ -1870,6 +1872,7 @@ function achievementsUnlockedCount(){
   return Object.values(state.achievementTierAwarded).reduce((s,t)=> s+(t>=0?t+1:0), 0);
 }
 let achievementPopupQueue = [];
+let achievementDoubleUsedThisBatch = false;
 function checkAchievements(){
   if(!state.achievementTierAwarded) state.achievementTierAwarded = {};
   const newlyUnlocked = [];
@@ -1890,6 +1893,7 @@ function checkAchievements(){
   saveState();
   if(newlyUnlocked.length>0){
     const wasEmpty = achievementPopupQueue.length===0;
+    if(wasEmpty) achievementDoubleUsedThisBatch = false; // fresh batch starting - reset the one-ad-per-sitting allowance
     achievementPopupQueue.push(...newlyUnlocked);
     if(wasEmpty) showNextAchievementPopup();
   }
@@ -1913,20 +1917,22 @@ function showAchievementPopup(cat, tierIdx, onClose){
     <div class="pixel md" style="margin-top:6px;">${cat.name}</div>
     <div style="font-family:'Baloo 2',sans-serif;font-weight:800;font-size:20px;color:${color};margin:6px 0;">${tierName}</div>
     <div class="hint">+${formatCoins(reward)} coins</div>
-    <div class="buttons-row"><button class="btn cream small full" id="achDoubleBtn">Watch Ad to Double</button></div>
+    ${achievementDoubleUsedThisBatch ? '' : `<div class="buttons-row"><button class="btn cream small full" id="achDoubleBtn">Watch Ad to Double</button></div>`}
     <div class="buttons-row"><button class="btn yolk small full" id="achPopupClose">Nice!</button></div>
   </div>`;
   document.body.appendChild(overlay);
   let resolved = false;
   const closeOnce = ()=>{ if(resolved) return; resolved = true; overlay.remove(); onClose(); };
   document.getElementById('achPopupClose').addEventListener('click', closeOnce);
-  document.getElementById('achDoubleBtn').addEventListener('click', ()=>{
+  const achDoubleBtn = document.getElementById('achDoubleBtn');
+  if(achDoubleBtn) achDoubleBtn.addEventListener('click', ()=>{
     if(resolved) return;
-    const btn = document.getElementById('achDoubleBtn');
-    btn.disabled = true; btn.textContent = 'Watching ad...';
+    achDoubleBtn.disabled = true; achDoubleBtn.textContent = 'Watching ad...';
+    document.getElementById('achPopupClose').disabled = true;
     showRewardedAd(()=>{
       if(resolved) return; // guards against Nice! being pressed while the simulated ad delay was still pending
       addCoins(reward); // base reward was already paid by checkAchievements - this tops it up to double
+      achievementDoubleUsedThisBatch = true;
       saveState(); sfxCoin();
       showToast(`Doubled! +${formatCoins(reward)} more coins`);
       closeOnce();
@@ -2835,7 +2841,7 @@ function eggCountdownLabel(remainMs){
 }
 function renderEggsPanel(panel){
   const eggs = state.eggs.slice(0,5); // capped so this can never stretch, same discipline as the firmware panel
-  panel.innerHTML = `<div class="top-bar"><div class="pixel sm">EGGS INCUBATING (${state.eggs.length})</div></div><div id="eggsListInner"></div>`;
+  panel.innerHTML = `<div class="top-bar"><div class="pixel sm">EGGS INCUBATING (${state.eggs.length})</div></div><div id="eggsListInner"></div><div id="eggAdRow"></div>`;
   const renderRows = ()=>{
     const listEl = document.getElementById('eggsListInner');
     if(!listEl) return;
@@ -2851,6 +2857,18 @@ function renderEggsPanel(panel){
       const i = parseInt(row.dataset.eggRow);
       if(Date.now()>=eggs[i].readyAt) row.addEventListener('click', ()=> openEggHatchPopup(i, panel));
     });
+    const adRow = document.getElementById('eggAdRow');
+    if(adRow){
+      const waitingEggs = eggs.map((e,i)=>({e,i})).filter(x=> Date.now()<x.e.readyAt);
+      adRow.innerHTML = waitingEggs.length
+        ? `<div class="buttons-row" style="margin-top:8px;"><button class="btn yolk small full" id="eggAdBtn">Watch Ad to Reduce Incubation Time</button></div>`
+        : '';
+      const adBtn = document.getElementById('eggAdBtn');
+      if(adBtn) adBtn.addEventListener('click', ()=>{
+        if(waitingEggs.length===1){ reduceEggTime(waitingEggs[0].i, renderRows); return; }
+        showEggPicker(waitingEggs, renderRows);
+      });
+    }
   };
   renderRows();
   clearInterval(eggPanelTickTimer);
@@ -2863,6 +2881,38 @@ function renderEggsPanel(panel){
       if(el && Date.now()<egg.readyAt) el.textContent = `Ready in ${eggCountdownLabel(egg.readyAt-Date.now())}`;
     });
   }, 1000);
+}
+function reduceEggTime(index, onDone){
+  const egg = state.eggs[index];
+  if(!egg || Date.now()>=egg.readyAt) return;
+  showRewardedAd(()=>{
+    const remaining = egg.readyAt - Date.now();
+    egg.readyAt = Date.now() + Math.floor(remaining/2);
+    saveState();
+    showToast("Ad watch complete - incubation time reduced!");
+    onDone();
+  });
+}
+function showEggPicker(waitingEggs, onDone){
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal-box">
+    <div class="pixel sm" style="text-align:center;">Which egg?</div>
+    <div class="hint" style="text-align:center;margin-bottom:6px;">Choose one to reduce - this only affects that egg.</div>
+    <div id="eggPickerList"></div>
+    <div class="buttons-row"><button class="btn cream small full" id="eggPickerCancel">Cancel</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('eggPickerList').innerHTML = waitingEggs.map(({e,i})=> `<div class="store-item" data-pick-idx="${i}" style="cursor:pointer;">
+    <div style="width:26px;height:26px;">${eggSVG(e.barcode,26)}</div>
+    <div class="sinfo"><div class="sname">Mystery Egg</div><div class="sdesc">Ready in ${eggCountdownLabel(e.readyAt-Date.now())}</div></div>
+  </div>`).join('');
+  document.getElementById('eggPickerCancel').addEventListener('click', ()=> overlay.remove());
+  document.querySelectorAll('#eggPickerList [data-pick-idx]').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      overlay.remove();
+      reduceEggTime(Number(row.dataset.pickIdx), onDone);
+    });
+  });
 }
 const EGG_HATCH_TAPS_NEEDED = 50;
 function eggCrackOverlay(stage){
@@ -3633,7 +3683,6 @@ function releaseMonster(id){
 function closeDetailModal(overlay){
   if(overlay._boostTimerInterval) clearInterval(overlay._boostTimerInterval);
   overlay.remove();
-  document.body.style.overflow='';
   const panel = document.getElementById('panel');
   if(currentTab==='collection' && squadSubView==='squad'){ renderSquadGrid(panel); }
   else renderTab();
@@ -3642,7 +3691,6 @@ function openDetailModal(m, editable, allowEquip){
   const stale = document.querySelector('.modal-overlay');
   if(stale){ if(stale._boostTimerInterval) clearInterval(stale._boostTimerInterval); stale.remove(); }
   if(allowEquip===undefined) allowEquip = true;
-  document.body.style.overflow='hidden';
   const rs = RARITY_STYLE[m.rarity];
   const overlay = document.createElement('div');
   overlay.className='modal-overlay';
@@ -3743,6 +3791,8 @@ function renderModalActions(container, m, overlay, allowEquip){
       showConfirm(`Release ${m.name} for good? This can't be undone.`, ()=>{
         releaseMonster(m.id); overlay.remove();
         if(m.rarity==='legendary') markEasterEggStep('egg3','e');
+        const p = document.getElementById('panel');
+        if(currentTab==='collection' && squadSubView==='squad'){ renderSquadGrid(p); } else renderTab();
       }, {hazard:true, confirmLabel:'Yes, release'});
     };
     if(m.rarity==='legendary'){
@@ -3863,6 +3913,25 @@ function ensureHunterCode(){
   }
   return state.hunterCode;
 }
+// A permanent internal identity, separate from the player's chosen username - this never changes,
+// so friend connections survive username changes instead of breaking (the old hunter:<username> key
+// scheme meant a rename silently orphaned anyone who'd already added the old name).
+function ensurePlayerId(){
+  if(!state.playerId){
+    state.playerId = (typeof crypto!=='undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'p-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+    saveState();
+  }
+  return state.playerId;
+}
+// Resolves a typed username to the stable player ID behind it, via the username:<name> index -
+// returns null if nobody has published under that username.
+async function resolveUsernameToPlayerId(username){
+  try{
+    const res = await storageGet('username:'+username, true);
+    if(res && res.value){ const parsed = JSON.parse(res.value); return parsed.playerId||null; }
+  }catch(e){}
+  return null;
+}
 function myPublicProfile(){
   const highest = [...state.collection].sort((a,b)=>b.level-a.level)[0];
   const now = Date.now();
@@ -3873,11 +3942,13 @@ function myPublicProfile(){
   if(!state.weeklyXpBaseline || now - state.weeklyXpBaseline.start >= WEEK_MS){
     state.weeklyXpBaseline = { start: now, xp: state.hunterXP||0 };
   }
+  const snap = m=> ({barcode:m.barcode, name:m.name, type:m.type, typeLabel:m.typeLabel, typeColor:m.typeColor, typeDark:m.typeDark, rarity:m.rarity, holo:m.holo, hueShift:m.hueShift, level:m.level, bio:m.bio, traits:Object.assign({},m.traits), stats:Object.assign({},m.stats), weapon:m.weapon||null, armor:m.armor||null, shield:m.shield||null, costume:m.costume||null});
   return {
     name: state.hunterName||'Hunter',
     totalWins: state.stats.totalWins, totalFights: state.stats.totalFights, bestStreak: state.stats.bestStreak,
     discovered: Object.keys(state.almanac).length,
-    highest: highest? {barcode:highest.barcode, name:highest.name, type:highest.type, typeLabel:highest.typeLabel, typeColor:highest.typeColor, typeDark:highest.typeDark, rarity:highest.rarity, holo:highest.holo, hueShift:highest.hueShift, level:highest.level, bio:highest.bio, traits:Object.assign({},highest.traits), stats:Object.assign({},highest.stats)} : null,
+    highest: highest? snap(highest) : null,
+    squad: favoritedSquad().slice(0,5).map(snap),
     hunterXP: state.hunterXP||0,
     dailyXP: Math.max(0, (state.hunterXP||0) - state.dailyXpBaseline.xp),
     weeklyXP: Math.max(0, (state.hunterXP||0) - state.weeklyXpBaseline.xp),
@@ -3886,10 +3957,21 @@ function myPublicProfile(){
   };
 }
 async function publishHunterProfile(){
+  const playerId = ensurePlayerId();
   const code = ensureHunterCode();
   const profile = myPublicProfile();
   saveState(); // myPublicProfile may have just rolled the daily/weekly XP baseline forward - persist that
-  try{ await storageSet('hunter:'+code, JSON.stringify(profile), true); }catch(e){}
+  try{ await storageSet('hunter:'+playerId, JSON.stringify(profile), true); }catch(e){}
+  if(state.lastPublishedUsername !== code){
+    if(state.lastPublishedUsername){
+      try{ await storageDelete('username:'+state.lastPublishedUsername, true); }catch(e){ /* best-effort - a stale index entry just means that old name won't resolve, no data loss */ }
+    }
+    try{
+      await storageSet('username:'+code, JSON.stringify({playerId}), true);
+      state.lastPublishedUsername = code;
+      saveState();
+    }catch(e){}
+  }
 }
 function renderProfile(container, panel){
   publishHunterProfile();
@@ -3932,7 +4014,7 @@ function renderProfile(container, panel){
   const highestBeastRow = document.getElementById('highestBeastRow');
   if(highestBeastRow) highestBeastRow.addEventListener('click', ()=>{
     const highest = [...state.collection].sort((a,b)=>b.level-a.level)[0];
-    if(highest) openDetailModal(highest, true);
+    if(highest) openDetailModal(highest, false, false);
   });
 }
 async function fetchAllHunterProfiles(){
@@ -4011,15 +4093,13 @@ function renderFriendsList(container){
     if(desired===code){ showToast("That's already your username!"); return; }
     if(isProfane(desired)){ showToast("Please choose a different username"); return; }
     try{
-      const existing = await storageGet('hunter:'+desired, true);
-      if(existing && existing.value){ showToast("This hunter name is taken - try another"); return; }
+      const existingId = await resolveUsernameToPlayerId(desired);
+      if(existingId && existingId!==state.playerId){ showToast("This hunter name is taken - try another"); return; }
     }catch(e){ /* not found is expected and means it's available */ }
-    const oldCode = state.hunterCode;
     state.hunterCode = desired;
     state.hunterName = desired;
     saveState();
-    await publishHunterProfile();
-    try{ await storageDelete('hunter:'+oldCode, true); }catch(e){ /* best-effort cleanup, not critical if it fails */ }
+    await publishHunterProfile(); // handles moving the username index (old name removed, new one written) to the same stable player ID
     showToast(`Username set to ${desired}!`);
     renderFriendsList(container);
   });
@@ -4030,12 +4110,12 @@ function renderFriendsList(container){
     const target = document.getElementById('addHunterInput').value.trim().toUpperCase();
     if(!target){ showToast("Enter a Hunter Username"); return; }
     if(target===code){ showToast("That's your own username!"); return; }
-    if((state.friends||[]).some(f=>f.code===target)){ showToast("Already friends"); return; }
     try{
-      const res = await storageGet('hunter:'+target, true);
-      if(!res||!res.value){ showToast("No hunter found with that username - ask them to open Friends first"); return; }
+      const targetId = await resolveUsernameToPlayerId(target);
+      if(!targetId){ showToast("No hunter found with that username - ask them to open Friends first"); return; }
+      if((state.friends||[]).some(f=> f.playerId===targetId || f.code===target)){ showToast("Already friends"); return; }
       if(!state.friends) state.friends=[];
-      state.friends.push({code:target}); saveState(); checkAchievements();
+      state.friends.push({playerId:targetId}); saveState(); checkAchievements();
       showToast("Hunter added!");
       loadFriendsList();
     }catch(e){ showToast("Couldn't reach that hunter right now"); }
@@ -4046,11 +4126,27 @@ function renderFriendsList(container){
     const me = myPublicProfile(); me.isMe = true;
     let friendRows = [];
     if(state.friends && state.friends.length>0){
+      let upgraded = false;
       for(const f of state.friends){
         let profile=null;
-        try{ const res = await storageGet('hunter:'+f.code, true); if(res&&res.value) profile=JSON.parse(res.value); }catch(e){}
-        friendRows.push({code:f.code, profile});
+        try{
+          if(!f.playerId && f.code){
+            // Legacy entry from before the stable-ID system - try to self-heal it now
+            const resolvedId = await resolveUsernameToPlayerId(f.code);
+            if(resolvedId){ f.playerId = resolvedId; upgraded = true; }
+          }
+          if(f.playerId){
+            const res = await storageGet('hunter:'+f.playerId, true);
+            if(res&&res.value) profile=JSON.parse(res.value);
+          } else if(f.code){
+            // Last-resort fallback for data that hasn't caught up to the new scheme yet
+            const res = await storageGet('hunter:'+f.code, true);
+            if(res&&res.value) profile=JSON.parse(res.value);
+          }
+        }catch(e){}
+        friendRows.push({code:f.code||(profile&&profile.name), playerId:f.playerId||null, profile});
       }
+      if(upgraded) saveState();
     }
     if(currentTab!=='collection') return; // player left the tab while these were in flight
     const leaderboardRowHTML = (pr, i, isMe)=>{
@@ -4070,7 +4166,7 @@ function renderFriendsList(container){
       const all = await fetchAllHunterProfiles();
       if(currentTab!=='collection' || friendsBoardMode!=='global') return; // left the tab, or toggled back to Friends List, while this was loading
       const sortKey = globalPeriod==='daily' ? 'dailyXP' : globalPeriod==='weekly' ? 'weeklyXP' : 'hunterXP';
-      const fullBoard = [{profile:me}, ...all.filter(r=>r.code!==code)]
+      const fullBoard = [{profile:me}, ...all.filter(r=>r.code!==state.playerId)]
         .sort((a,b)=> (b.profile[sortKey]||0)-(a.profile[sortKey]||0))
         .slice(0, GLOBAL_MAX_ROWS);
       if(globalPeriod==='alltime'){
@@ -4108,16 +4204,88 @@ function renderFriendsList(container){
     listEl.innerHTML = friendRows
       .slice()
       .sort((a,b)=> (b.profile? b.profile.lastSeen||0 : 0) - (a.profile? a.profile.lastSeen||0 : 0))
-      .map(r=>{
+      .map((r,i)=>{
         if(!r.profile) return `<div class="log-row" style="justify-content:space-between;"><span class="log-name">${escapeHtml(r.code)}</span><span class="hint">Not found</span></div>`;
         const pr = r.profile;
         const online = (Date.now()-(pr.lastSeen||0)) < ONLINE_MS;
-        return `<div class="log-row" style="justify-content:space-between;">
+        return `<div class="log-row" style="justify-content:space-between;cursor:pointer;" data-friend-idx="${i}">
           <span class="log-name">${escapeHtml(pr.name)}</span>
           <span class="pixel sm" style="font-size:9px;color:${online?'#3f9142':'#8a8a8a'};">${online?'ONLINE':timeAgo(pr.lastSeen)}</span>
         </div>`;
       }).join('');
+    const sortedRows = friendRows.slice().sort((a,b)=> (b.profile? b.profile.lastSeen||0 : 0) - (a.profile? a.profile.lastSeen||0 : 0));
+    listEl.querySelectorAll('[data-friend-idx]').forEach(row=>{
+      const r = sortedRows[Number(row.dataset.friendIdx)];
+      if(r && r.profile) row.addEventListener('click', ()=> showFriendSnapshot(r.playerId, r.profile));
+    });
   }
+}
+function showFriendSnapshot(friendPlayerId, pr){
+  const rank = HUNTER_RANKS[hunterRankIndex(pr.hunterXP||0)];
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <button class="btn tiny cream" id="fsClose" style="position:absolute;top:10px;right:10px;">${iconClose()}</button>
+      <div class="pixel md" style="text-align:center;">${escapeHtml(pr.name)}</div>
+      <div class="log-row"><div class="log-info"><div class="log-meta">Wins ${pr.totalWins||0} · Fights ${pr.totalFights||0} · Best streak ${pr.bestStreak||0}</div></div></div>
+      <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
+      <div class="log-row" id="fsHighestRow" style="${pr.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${pr.highest? pr.highest.name+' - Lv.'+pr.highest.level+' ('+RARITY_STYLE[pr.highest.rarity].label+')' : '-'}</div></div></div>
+      <div class="pixel sm" style="margin-top:8px;">Squad</div>
+      <div class="arena-roster" id="fsSquadRoster" style="margin-top:4px;"></div>
+      <div class="buttons-row" style="margin-top:12px;"><button class="btn coral small full" id="fsBattleReq">Send Battle Request</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('fsClose').addEventListener('click', ()=> overlay.remove());
+  const highestRow = document.getElementById('fsHighestRow');
+  if(highestRow && pr.highest) highestRow.addEventListener('click', ()=> openDetailModal(pr.highest, false, false));
+  const squadRoster = document.getElementById('fsSquadRoster');
+  const squad = pr.squad||[];
+  squadRoster.innerHTML = squad.length
+    ? squad.map(m=> `<div class="arena-roster-icon" data-squad-idx="${squad.indexOf(m)}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('')
+    : `<div class="hint">No favourited squad yet.</div>`;
+  squadRoster.querySelectorAll('[data-squad-idx]').forEach(el=>{
+    const m = squad[Number(el.dataset.squadIdx)];
+    if(m) el.addEventListener('click', ()=> openDetailModal(m, false, false));
+  });
+  document.getElementById('fsBattleReq').addEventListener('click', async ()=>{
+    if(!friendPlayerId){ showToast("Can't reach this hunter right now"); return; }
+    overlay.remove();
+    showBattleRequestWaiting(friendPlayerId, pr.name);
+  });
+}
+function showBattleRequestWaiting(targetPlayerId, targetName){
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal-box" style="text-align:center;">
+    <div class="pixel sm">Sending battle request to ${escapeHtml(targetName)}...</div>
+    <div class="hint" id="fsWaitStatus" style="margin-top:8px;">Waiting for them to accept...</div>
+    <div class="buttons-row"><button class="btn cream small full" id="fsWaitCancel">Cancel</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  let cancelled = false;
+  let pollTimer = null;
+  document.getElementById('fsWaitCancel').addEventListener('click', async ()=>{
+    cancelled = true;
+    clearInterval(pollTimer);
+    try{ await storageDelete('battleRequest:'+targetPlayerId, true); }catch(e){}
+    overlay.remove();
+  });
+  (async ()=>{
+    const sessionCode = await sendBattleRequest(targetPlayerId, targetName);
+    if(!sessionCode || cancelled){ if(!cancelled){ showToast("Couldn't send that request - try again"); overlay.remove(); } return; }
+    pollTimer = setInterval(async ()=>{
+      if(cancelled){ clearInterval(pollTimer); return; }
+      try{
+        const res = await storageGet('battleRequest:'+targetPlayerId, true);
+        if(!res || !res.value){ clearInterval(pollTimer); if(!cancelled){ showToast(`${targetName} declined`); overlay.remove(); } return; }
+        const req = JSON.parse(res.value);
+        if(req.accepted){
+          clearInterval(pollTimer);
+          overlay.remove();
+          enterBattleSession(sessionCode, document.getElementById('panel'));
+        }
+      }catch(e){}
+    }, 2000);
+  })();
 }
 
 /* ---- ALMANAC (tiled, paginated) ---- */
@@ -5427,13 +5595,31 @@ let versusCategory = 'menu';
 function renderVersus(panel){
   if(versusCategory==='menu'){
     panel.innerHTML = `
+      <div id="incomingBattleRequestSlot"></div>
       <div class="section-label">Choose how to play</div>
       <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#4E8FD1',52)}</div><div class="vs-center"><span id="easterEgg3BtIcon" style="cursor:pointer;display:inline-flex;">${iconBluetooth(30)}</span></div><div class="vs-side">${genericMonsterIcon('#E8542E',52)}</div></div>
-      <div class="buttons-row"><button class="btn yolk small full" id="vcNearby">Player VS Player</button></div>
+      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcNearby">Battle by Code</button></div>
       <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#8FA998',52)}</div><div class="vs-center"><span class="vs-badge">VS</span></div><div class="vs-side">${genericMonsterIcon('#F77F00',52)}</div></div>
-      <div class="buttons-row"><button class="btn yolk small full" id="vcArena">Arena (Train Solo)</button></div>
+      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcArena">Arena (Train Solo)</button></div>
       <div class="vs-illustration"><div class="vs-side"><div class="vs-squad-cluster" id="bossSquadGraphic" style="cursor:pointer;"><div class="vs-squad-row">${miniMonsterIcon('#4E8FD1',15)}${miniMonsterIcon('#E8542E',15)}</div><div class="vs-squad-row">${miniMonsterIcon('#5CA85C',15)}${miniMonsterIcon('#F2C13D',15)}${miniMonsterIcon('#9B5DE5',15)}</div></div></div><div class="vs-center"><span class="vs-badge">VS</span></div><div class="vs-side">${genericMonsterIcon('#D4A017',58)}</div></div>
-      <div class="buttons-row"><button class="btn yolk small full" id="vcBoss">Boss Training</button></div>`;
+      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcBoss">Boss Training</button></div>`;
+    checkIncomingBattleRequest().then(req=>{
+      if(!req) return;
+      const slot = document.getElementById('incomingBattleRequestSlot');
+      if(!slot) return; // player navigated elsewhere while this was checking
+      slot.innerHTML = `<div class="log-row" style="background:#D4A017;flex-direction:column;align-items:stretch;gap:6px;">
+        <div class="pixel sm" style="text-align:center;">${escapeHtml(req.fromName)} wants to battle!</div>
+        <div class="buttons-row" style="margin-top:0;"><button class="btn coral small" id="battleReqAccept">Accept</button><button class="btn cream small" id="battleReqDecline">Decline</button></div>
+      </div>`;
+      document.getElementById('battleReqAccept').addEventListener('click', async ()=>{
+        await acceptBattleRequest(req);
+        enterBattleSession(req.sessionCode, panel);
+      });
+      document.getElementById('battleReqDecline').addEventListener('click', async ()=>{
+        await declineBattleRequest();
+        slot.innerHTML = '';
+      });
+    });
     document.getElementById('vcNearby').addEventListener('click', ()=>{ versusCategory='nearby'; renderVersus(panel); });
     document.getElementById('vcArena').addEventListener('click', ()=>{ versusCategory='arena'; renderVersus(panel); });
     document.getElementById('vcBoss').addEventListener('click', ()=>{ versusCategory='boss'; renderVersus(panel); });
@@ -5483,7 +5669,7 @@ function renderVersus(panel){
     return;
   }
   if(versusCategory==='nearby'){
-    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">PLAYER VS PLAYER</div>${backRow}</div><div id="nearbyHost"></div>`;
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">BATTLE BY CODE</div>${backRow}</div><div id="nearbyHost"></div>`;
     document.getElementById('vcBack').addEventListener('click', ()=>{ stopNearbyPoll(); versusCategory='menu'; renderVersus(panel); });
     renderNearby(document.getElementById('nearbyHost'));
     return;
@@ -5534,17 +5720,17 @@ function renderNearby(panel){
     // of the script) to actually bridge two different Android devices.
     if(!nearbyMyOwnCode){ nearbyMyOwnCode = randomCode(); connectNearby(nearbyMyOwnCode, panel); return; }
     panel.innerHTML = `
-      <div class="hint">Your pairing PIN - share it with a friend so they can join you:</div>
+      <div class="hint">Your pairing code - share it with anyone, anywhere, to trade or battle. Great for meeting new hunters who aren't on your Friends list yet:</div>
       <div class="coin-offer-display" style="font-size:20px;">${nearbyMyOwnCode}</div>
       <div class="hint" style="margin-top:10px;">Waiting for them to join...</div>
       ${localWarning}
-      <div class="hint" style="margin-top:12px;">Joining someone else instead? Enter their PIN:</div>
-      <div class="manual-row" style="margin-top:4px;"><input id="nearbyCodeInput" placeholder="Their PIN" maxlength="4" inputmode="numeric" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px 10px;font-family:'Press Start 2P';font-size:12px;text-align:center;"></div>
+      <div class="hint" style="margin-top:12px;">Joining someone else instead? Enter their code:</div>
+      <div class="manual-row" style="margin-top:4px;"><input id="nearbyCodeInput" placeholder="Their code" maxlength="4" inputmode="numeric" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px 10px;font-family:'Press Start 2P';font-size:12px;text-align:center;"></div>
       <div class="buttons-row"><button class="btn yolk small full" id="nearbyConnectBtn">Pair</button></div>
       <div class="buttons-row"><button class="btn cream small full" id="nearbyLeaveBtn2">Cancel</button></div>`;
     document.getElementById('nearbyConnectBtn').addEventListener('click', ()=>{
       const v = document.getElementById('nearbyCodeInput').value.trim();
-      if(!/^\d{4}$/.test(v)){ showToast("Enter a 4-digit pairing PIN"); return; }
+      if(!/^\d{4}$/.test(v)){ showToast("Enter a 4-digit pairing code"); return; }
       nearbyMyOwnCode=null;
       connectNearby(v, panel);
     });
@@ -5561,12 +5747,49 @@ async function connectNearby(code, panel){
     nearbyRole='host';
   } else if(!doc.guest.present){ doc.guest.present=true; doc.guest.name=state.hunterName||'Hunter'; nearbyRole='guest'; }
   else if(!doc.host.present){ doc.host.present=true; doc.host.name=state.hunterName||'Hunter'; nearbyRole='host'; }
-  else { showToast("That PIN already has two players connected - try another"); return; }
+  else { showToast("That code already has two players connected - try another"); return; }
   await saveNearbyDocRaw(code, doc);
   if(versusCategory!=='nearby') return; // check again - the second await is another window for the player to have left
   nearbyCode=code; nearbyDoc=doc; nearbyAppliedLocally=false;
   ensureNearbyPolling(panel);
   renderNearbyActive(panel);
+}
+async function sendBattleRequest(targetPlayerId, targetName){
+  const myId = ensurePlayerId();
+  const sessionCode = 'BR'+Math.random().toString(36).slice(2,10).toUpperCase();
+  try{
+    await storageSet('battleRequest:'+targetPlayerId, JSON.stringify({fromId:myId, fromName:state.hunterName||'Hunter', sessionCode, accepted:false, timestamp:Date.now()}), true);
+    return sessionCode;
+  }catch(e){ return null; }
+}
+async function checkIncomingBattleRequest(){
+  const myId = ensurePlayerId();
+  try{
+    const res = await storageGet('battleRequest:'+myId, true);
+    if(res && res.value){
+      const req = JSON.parse(res.value);
+      if(Date.now()-req.timestamp < 5*60000) return req; // ignore anything stale (over 5 minutes old) rather than resurrect a long-dead request
+    }
+  }catch(e){}
+  return null;
+}
+async function declineBattleRequest(){
+  try{ await storageDelete('battleRequest:'+ensurePlayerId(), true); }catch(e){}
+}
+async function acceptBattleRequest(req){
+  try{
+    req.accepted = true;
+    await storageSet('battleRequest:'+ensurePlayerId(), JSON.stringify(req), true);
+  }catch(e){}
+}
+// Routes either side of an accepted battle request straight into a live duel, skipping the
+// manual PIN entry entirely - the session code was already exchanged silently through Firebase.
+function enterBattleSession(sessionCode, panel){
+  nearbyConfirmedName = true;
+  nearbySubMode = 'battle';
+  currentTab = 'versus';
+  versusCategory = 'nearby';
+  connectNearby(sessionCode, panel);
 }
 function ensureNearbyPolling(panel){
   if(nearbyPollTimer || !nearbyCode) return;
@@ -5597,7 +5820,7 @@ function renderNearbyActive(panel){
   const otherSide = nearbyRole==='host'? doc.guest : doc.host;
   const otherPresent = otherSide.present;
   if(!otherPresent){
-    panel.innerHTML = `<div class="empty-state">PAIRING PIN ${nearbyCode}<br><span style="font-weight:400;font-size:12px;">Waiting for another hunter to pair as ${escapeHtml(state.hunterName||'Hunter')}...</span></div><div class="buttons-row"><button class="btn cream small full" id="nearbyLeaveBtn">Cancel</button></div>`;
+    panel.innerHTML = `<div class="empty-state">PAIRING CODE ${nearbyCode}<br><span style="font-weight:400;font-size:12px;">Waiting for another hunter to pair as ${escapeHtml(state.hunterName||'Hunter')}...</span></div><div class="buttons-row"><button class="btn cream small full" id="nearbyLeaveBtn">Cancel</button></div>`;
     document.getElementById('nearbyLeaveBtn').addEventListener('click', leaveNearby);
     return;
   }
