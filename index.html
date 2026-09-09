@@ -587,7 +587,7 @@ function buySquadPage(onDone){
   if(onDone) onDone();
 }
 const MAX_FAVORITES = 5;
-const REST_MS = 300000; // 5 minutes base (was 1) - long enough that watching an ad to skip it feels genuinely worth it
+const REST_MS = 120000; // 2 minutes for Arena/Boss Training - Wild Queens use a separate, longer 25-minute rest elsewhere
 const MAX_COINS = 2147483647;
 const PAGE_SIZE = 64;
 const MAX_LEVEL_BY_RARITY = {common:30, uncommon:60, rare:90, epic:120, legendary:150};
@@ -946,14 +946,16 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '1.96';
+const FIRMWARE_VERSION = '1.97';
 const FIRMWARE_CHANGELOG = [
-  'Fixed a rare glitch when quickly opening/closing Skrambeast profiles',
-  'Rank ribbon cleaned up - tier now shown by star colour, not repeated text',
-  'Tap "Highest Skrambeast" on your profile to view it',
-  'Sell All and Release are now clearly marked as high-risk actions',
-  'Global Leaderboard: Daily/Weekly/All Time boards, proper pagination, tap a player to see their best Skrambeast',
-  'Redesigned the egg nest artwork',
+  'Equipped gear (weapons, armour, party hats) now actually shows when viewing a friend\'s or leaderboard player\'s Skrambeast',
+  'Fixed a serious bug where pairing codes could corrupt your own username - Change Username moved to Settings',
+  'Boss Training rest time corrected to 2 minutes (was accidentally 5) - added a "Battle Again" button',
+  'Global Leaderboard: clicking any player now reliably opens their full profile',
+  'Queen battle win-chance is now a genuine estimate, not a rough guess - applies to Wild Queens and Boss Training alike',
+  'All scanner skins now a flat 15,000 coins',
+  'Store item pop-ups show real extra detail instead of repeating the same line',
+  'Redesigned monster renaming with a clearer pencil-icon flow',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1243,10 +1245,33 @@ function generateBoss(code){
 function estimateBossWinChance(boss){
   const favs = favoritedSquad();
   if(favs.length<5) return 5;
-  const teamPower = favs.reduce((s,m)=>{ const es=effectiveStatsWithBuff(m); return s+es.power+es.guard+es.hp*0.08; },0);
-  const bossPower = boss.stats.power + boss.stats.guard + boss.stats.hp*0.08;
-  const ratio = teamPower/(teamPower+bossPower);
-  return Math.max(3, Math.min(96, Math.round(ratio*100)));
+  const trials = 150;
+  const bossTickMs = Math.max(550, Math.round(TAP_BASE_INTERVAL.legendary * (1 - (boss.level/150)*0.25)));
+  const playerTapMs = 350; // a reasonable sustained real tap rate
+  let wins = 0;
+  for(let t=0;t<trials;t++){
+    let bossHp = boss.stats.hp;
+    const fighters = favs.map(m=>{ const es = effectiveStatsWithBuff(m); return {hp:es.hp, power:es.power, guard:es.guard, type:m.type}; });
+    let idx = 0, nextPlayerTap = playerTapMs, nextBossTick = bossTickMs, won = null;
+    while(won===null){
+      if(idx>=fighters.length){ won=false; break; }
+      const f = fighters[idx];
+      if(nextPlayerTap <= nextBossTick){
+        let dmg = Math.max(1, Math.round(f.power*0.28 - boss.stats.guard*0.12 + Math.random()*2));
+        dmg = Math.round(dmg * typeMatchupMultiplier(f.type, boss.type));
+        bossHp -= dmg;
+        nextPlayerTap += playerTapMs;
+        if(bossHp<=0){ won=true; break; }
+      } else {
+        const dmg = Math.max(1, Math.round(boss.stats.power - f.guard*0.35 + (Math.random()*8-4)));
+        f.hp -= dmg;
+        nextBossTick += bossTickMs;
+        if(f.hp<=0) idx++;
+      }
+    }
+    if(won) wins++;
+  }
+  return Math.max(3, Math.min(96, Math.round(100*wins/trials)));
 }
 const BOSS_BATTLE_THRESHOLD = 250;
 function maybeTriggerBoss(){
@@ -2547,15 +2572,15 @@ const LASER_COLORS = [
 ];
 const SCANNER_SKINS = [
   {key:'sparkly', name:'Sparkly', desc:'A shimmering starfield shell, bright white laser', cost:15000, bezelClass:'skin-sparkly', laserBar:'rgba(255,255,255,.9)', laserGlow:'rgba(255,255,255,.95)', scanFx:'fx-sparkly'},
-  {key:'gold', name:'Gold', desc:'A gleaming gold shell, warm golden laser', cost:20000, bezelClass:'skin-gold', laserBar:'rgba(255,200,50,.85)', laserGlow:'rgba(255,200,50,.9)', scanFx:'fx-gold'},
-  {key:'space', name:'Space', desc:'A deep-space shell, pulsing violet laser', cost:20000, bezelClass:'skin-space', laserBar:'rgba(150,80,255,.85)', laserGlow:'rgba(150,80,255,.9)', scanFx:'fx-space'},
+  {key:'gold', name:'Gold', desc:'A gleaming gold shell, warm golden laser', cost:15000, bezelClass:'skin-gold', laserBar:'rgba(255,200,50,.85)', laserGlow:'rgba(255,200,50,.9)', scanFx:'fx-gold'},
+  {key:'space', name:'Space', desc:'A deep-space shell, pulsing violet laser', cost:15000, bezelClass:'skin-space', laserBar:'rgba(150,80,255,.85)', laserGlow:'rgba(150,80,255,.9)', scanFx:'fx-space'},
   {key:'camo', name:'Camo', desc:'A tactical desert shell, amber laser', cost:15000, bezelClass:'skin-camo', laserBar:'rgba(255,140,30,.85)', laserGlow:'rgba(255,140,30,.9)', scanFx:'fx-camo'},
-  {key:'stickers', name:'Stickers', desc:'A shell covered in stickers, rainbow laser', cost:25000, bezelClass:'skin-stickers', laserBar:null, laserGlow:null, scanFx:'fx-stickers'},
-  {key:'gogh', name:'Gogh', desc:'Starry Night swirling shell, swirling blue laser', cost:30000, bezelClass:'skin-gogh', laserBar:'rgba(70,130,220,.9)', laserGlow:'rgba(70,130,220,.9)', scanFx:'fx-gogh'},
-  {key:'clear', name:'Clear', desc:'See-through shell with visible wiring, crossed green lasers', cost:30000, bezelClass:'skin-clear', laserBar:'rgba(80,255,140,.9)', laserGlow:'rgba(80,255,140,.9)', scanFx:'fx-clear'},
-  {key:'matrix', name:'Matrix', desc:'Green-to-black gradient shell, full-screen falling code', cost:40000, bezelClass:'skin-matrix', laserBar:'rgba(80,255,120,.9)', laserGlow:'rgba(80,255,120,.9)', scanFx:'fx-matrix'},
-  {key:'punk', name:'Punk', desc:'A steampunk brass-and-gear shell, yellow and red laser', cost:30000, bezelClass:'skin-punk', laserBar:'rgba(240,190,50,.9)', laserGlow:'rgba(220,60,40,.85)', scanFx:'fx-punk'},
-  {key:'blocks', name:'Blocks', desc:'A blocky world cross-section shell, from sky to lava', cost:35000, bezelClass:'skin-blocks', laserBar:'rgba(255,255,255,.85)', laserGlow:'rgba(255,255,255,.9)', scanFx:'fx-blocks'},
+  {key:'stickers', name:'Stickers', desc:'A shell covered in stickers, rainbow laser', cost:15000, bezelClass:'skin-stickers', laserBar:null, laserGlow:null, scanFx:'fx-stickers'},
+  {key:'gogh', name:'Gogh', desc:'Starry Night swirling shell, swirling blue laser', cost:15000, bezelClass:'skin-gogh', laserBar:'rgba(70,130,220,.9)', laserGlow:'rgba(70,130,220,.9)', scanFx:'fx-gogh'},
+  {key:'clear', name:'Clear', desc:'See-through shell with visible wiring, crossed green lasers', cost:15000, bezelClass:'skin-clear', laserBar:'rgba(80,255,140,.9)', laserGlow:'rgba(80,255,140,.9)', scanFx:'fx-clear'},
+  {key:'matrix', name:'Matrix', desc:'Green-to-black gradient shell, full-screen falling code', cost:15000, bezelClass:'skin-matrix', laserBar:'rgba(80,255,120,.9)', laserGlow:'rgba(80,255,120,.9)', scanFx:'fx-matrix'},
+  {key:'punk', name:'Punk', desc:'A steampunk brass-and-gear shell, yellow and red laser', cost:15000, bezelClass:'skin-punk', laserBar:'rgba(240,190,50,.9)', laserGlow:'rgba(220,60,40,.85)', scanFx:'fx-punk'},
+  {key:'blocks', name:'Blocks', desc:'A blocky world cross-section shell, from sky to lava', cost:15000, bezelClass:'skin-blocks', laserBar:'rgba(255,255,255,.85)', laserGlow:'rgba(255,255,255,.9)', scanFx:'fx-blocks'},
 ];
 function shellSwatchesHTML(){
   const basic = SHELL_THEMES.map(s=> `<button class="btn tiny ${state.scannerCustomization.shell===s.key?'yolk':'cream'}" data-shell="${s.key}">${s.name}</button>`).join('');
@@ -2640,6 +2665,9 @@ function showSettingsModal(){
     ${toggleRow('highContrast','High Contrast','Bolder text and borders throughout')}
     ${toggleRow('lightMode','Light Mode','Swaps the dark shell for a light one')}
     ${toggleRow('autoFighter','Auto Fighter','Fights automatically at a steady pace, for players unable to tap')}
+    <div class="section-label" style="margin-top:10px;">Hunter Username</div>
+    <div class="hint">Letters and numbers only - no spaces or symbols. 3-15 characters.</div>
+    <div class="manual-row" style="margin-top:4px;"><input id="settingsUsernameInput" placeholder="${escapeHtml(state.hunterCode||'')}" maxlength="15" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px;box-sizing:border-box;font-size:12px;"><button class="btn tiny yolk" id="settingsUsernameSetBtn">Set</button></div>
     <div class="buttons-row" style="margin-top:8px;"><button class="btn-hazard small full" style="padding:6px 8px;" id="settingsResetBtn"><span class="hazard-label">Reset Progress</span></button></div>
     <div class="buttons-row" style="margin-top:6px;"><button class="btn cream small full" style="padding:6px 8px;" id="settingsCustomizeBtn">Customize Scanner</button></div>
     <div class="buttons-row" style="margin-top:6px;"><button class="btn yolk small full" style="padding:6px 8px;" id="settingsExportBtn">Export Save Code</button></div>
@@ -2647,6 +2675,12 @@ function showSettingsModal(){
     <div class="buttons-row" style="margin-top:6px;"><button class="btn yolk small full" style="padding:6px 8px;" id="settingsCloseBtn">Close</button></div>
   </div>`;
   document.body.appendChild(overlay);
+  document.getElementById('settingsUsernameSetBtn').addEventListener('click', async ()=>{
+    const result = await changeUsername(document.getElementById('settingsUsernameInput').value);
+    showToast(result.message);
+    if(result.ok) document.getElementById('settingsUsernameInput').value = '';
+    document.getElementById('settingsUsernameInput').placeholder = state.hunterCode||'';
+  });
   overlay.querySelectorAll('[data-setting]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const key = btn.dataset.setting;
@@ -3702,7 +3736,7 @@ function openDetailModal(m, editable, allowEquip){
       <button class="modal-close" id="modalClose">${iconClose()}</button>
       <div class="hint" id="modalBoostTimer" style="position:absolute;top:16px;right:42px;color:#9B5DE5;font-weight:700;text-align:right;"></div>
       <div class="mini-svg float" id="modalIcon" style="width:110px;height:110px;margin:0 auto;border-radius:50%;display:flex;justify-content:center;align-items:center;${auraStyle(m)}">${monsterSVG(m,110)}</div>
-      ${editable? `<input class="modal-name" id="modalNameInput" maxlength="15" value="${m.name}">` : `<div class="pixel md" style="text-align:center;">${m.name}</div>`}
+      ${editable? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;"><div class="pixel md" id="modalNameDisplay">${escapeHtml(m.name)}</div><button class="btn tiny cream" id="modalRenameBtn" style="padding:3px 7px;font-size:12px;" aria-label="Rename">✏</button></div>` : `<div class="pixel md" style="text-align:center;">${m.name}</div>`}
       <div class="pixel sm" style="text-align:center;">${typeIcon(m.type,13)} ${m.typeLabel} · ${rs.label}${m.holo?' · HOLO':''} · Lv.${m.level}${isMaxed(m)?` ${iconTrophy(13,rs.color)}`:''}</div>
       ${xpBar}
       <div class="stat-row" id="modalStatRow" style="margin-top:6px;">${statLine(es)}</div>
@@ -3733,13 +3767,30 @@ function openDetailModal(m, editable, allowEquip){
   overlay.addEventListener('click', e=>{ if(e.target===overlay) closeDetailModal(overlay); });
   document.getElementById('modalClose').addEventListener('click', ()=> closeDetailModal(overlay));
   if(editable){
-    const nameInput = document.getElementById('modalNameInput');
-    nameInput.addEventListener('paste', e=> e.preventDefault());
-    nameInput.addEventListener('input', ()=>{ nameInput.value = nameInput.value.replace(/[^a-zA-Z0-9 ]/g,'').slice(0,15); });
-    nameInput.addEventListener('change', e=>{
-      const clean = e.target.value.trim();
-      if(clean && isProfane(clean)){ e.target.value=m.name; showToast("Please choose a different name"); return; }
-      m.name = clean || m.defaultName; e.target.value=m.name; saveState();
+    const renameBtn = document.getElementById('modalRenameBtn');
+    renameBtn.addEventListener('click', ()=>{
+      const renameOverlay = document.createElement('div'); renameOverlay.className='modal-overlay';
+      renameOverlay.innerHTML = `<div class="modal-box" style="max-width:300px;text-align:center;">
+        <div class="pixel md">Rename ${escapeHtml(m.defaultName||m.name)}</div>
+        <div class="hint" style="margin-top:4px;">Letters, numbers, and spaces only. Up to 15 characters.</div>
+        <input id="monsterRenameInput" maxlength="15" value="${escapeHtml(m.name)}" style="width:100%;box-sizing:border-box;border-radius:10px;border:2px solid #0d2027;padding:9px;margin-top:8px;background:#fff;text-align:center;font-size:14px;">
+        <div class="buttons-row" style="margin-top:10px;"><button class="btn yolk small full" id="monsterRenameSaveBtn">Save</button></div>
+        <div class="buttons-row"><button class="btn cream small full" id="monsterRenameCancelBtn">Cancel</button></div>
+      </div>`;
+      document.body.appendChild(renameOverlay);
+      const input = document.getElementById('monsterRenameInput');
+      input.addEventListener('paste', e=> e.preventDefault());
+      input.addEventListener('input', ()=>{ input.value = input.value.replace(/[^a-zA-Z0-9 ]/g,'').slice(0,15); });
+      document.getElementById('monsterRenameCancelBtn').addEventListener('click', ()=> renameOverlay.remove());
+      document.getElementById('monsterRenameSaveBtn').addEventListener('click', ()=>{
+        const clean = input.value.trim();
+        if(clean && isProfane(clean)){ showToast("Please choose a different name"); return; }
+        m.name = clean || m.defaultName;
+        saveState();
+        const nameDisplay = document.getElementById('modalNameDisplay');
+        if(nameDisplay) nameDisplay.textContent = m.name;
+        renameOverlay.remove();
+      });
     });
     renderModalActions(document.getElementById('modalActions'), m, overlay, allowEquip);
   }
@@ -3906,6 +3957,27 @@ function copyText(text, okMsg, failMsg){
 }
 
 /* ---- FRIENDS (lightweight - no real backend, uses the same shared-code storage Nearby relies on) ---- */
+// The ONE place identity is allowed to change. Every UI that lets a player set/change their
+// username must call this - never assign state.hunterCode / state.hunterName directly anywhere
+// else. This is what keeps the two fields in sync and the Firebase username index correct;
+// a prior bug let the Nearby pairing screen bypass all of this and directly set hunterName only,
+// which desynced it from hunterCode and silently broke the uniqueness index for that player.
+async function changeUsername(rawDesired){
+  const desired = String(rawDesired||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!desired || desired.length<3) return {ok:false, message:"Username needs at least 3 letters/numbers, no spaces or symbols"};
+  if(desired.length>15) return {ok:false, message:"Username needs to be 15 characters or fewer"};
+  if(desired===state.hunterCode) return {ok:false, message:"That's already your username!"};
+  if(isProfane(desired)) return {ok:false, message:"Please choose a different username"};
+  try{
+    const existingId = await resolveUsernameToPlayerId(desired);
+    if(existingId && existingId!==state.playerId) return {ok:false, message:"This hunter name is taken - try another"};
+  }catch(e){ /* not found is expected and means it's available */ }
+  state.hunterCode = desired;
+  state.hunterName = desired;
+  saveState();
+  await publishHunterProfile();
+  return {ok:true, message:`Username set to ${desired}!`};
+}
 function ensureHunterCode(){
   if(!state.hunterCode){
     state.hunterCode = (state.hunterName||'HUNTER').slice(0,10).toUpperCase()+'-'+Math.floor(1000+Math.random()*9000);
@@ -4064,45 +4136,17 @@ function renderFriendsList(container){
     </div>
     <div class="page-bar" id="globalPageBar" style="margin-top:6px;"></div>
     <div id="leaderboardInner"><div class="hint">Loading...</div></div>` : `
-    <div class="section-label" style="margin-top:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;">
-      <span>Add a Hunter</span>
-      <button class="btn tiny cream" id="editUsernameBtn" style="padding:3px 6px;font-size:9px;">Change My Username</button>
-    </div>
+    <div class="section-label" style="margin-top:6px;">Add a Hunter</div>
     <div class="manual-row"><input id="addHunterInput" placeholder="Enter Username" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px;box-sizing:border-box;font-size:12px;"><button class="btn yolk small" id="addHunterBtn">Add</button></div>
-    <div id="usernameEditRow" style="display:none;margin-top:6px;">
-      <div class="manual-row"><input id="newUsernameInput" placeholder="Choose a unique username" maxlength="15" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:8px;box-sizing:border-box;font-size:11px;"><button class="btn tiny yolk" id="setUsernameBtn">Set</button></div>
-    </div>
     <div class="section-label" style="margin-top:12px;">Friends</div>
     <div id="friendsListInner"><div class="hint">Loading...</div></div>
     <div class="buttons-row" style="margin-top:10px;"><button class="btn cream small full" id="copyHunterCode">Copy Hunter Username</button></div>`}`;
-  const editUsernameBtn = document.getElementById('editUsernameBtn');
-  if(editUsernameBtn) editUsernameBtn.addEventListener('click', ()=>{
-    const row = document.getElementById('usernameEditRow');
-    row.style.display = row.style.display==='none' ? 'block' : 'none';
-  });
   container.querySelectorAll('[data-board]').forEach(b=> b.addEventListener('click', ()=>{
     friendsBoardMode = b.dataset.board; renderFriendsList(container);
   }));
   container.querySelectorAll('[data-period]').forEach(b=> b.addEventListener('click', ()=>{
     globalPeriod = b.dataset.period; globalPage = 0; renderFriendsList(container);
   }));
-  const setUsernameBtn = document.getElementById('setUsernameBtn');
-  if(setUsernameBtn) setUsernameBtn.addEventListener('click', async ()=>{
-    const desired = document.getElementById('newUsernameInput').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
-    if(!desired || desired.length<3){ showToast("Username needs at least 3 letters/numbers"); return; }
-    if(desired===code){ showToast("That's already your username!"); return; }
-    if(isProfane(desired)){ showToast("Please choose a different username"); return; }
-    try{
-      const existingId = await resolveUsernameToPlayerId(desired);
-      if(existingId && existingId!==state.playerId){ showToast("This hunter name is taken - try another"); return; }
-    }catch(e){ /* not found is expected and means it's available */ }
-    state.hunterCode = desired;
-    state.hunterName = desired;
-    saveState();
-    await publishHunterProfile(); // handles moving the username index (old name removed, new one written) to the same stable player ID
-    showToast(`Username set to ${desired}!`);
-    renderFriendsList(container);
-  });
   const copyHunterCodeBtn = document.getElementById('copyHunterCode');
   if(copyHunterCodeBtn) copyHunterCodeBtn.addEventListener('click', ()=> copyText(code, 'Username copied!'));
   const addHunterBtn = document.getElementById('addHunterBtn');
@@ -4151,7 +4195,7 @@ function renderFriendsList(container){
     if(currentTab!=='collection') return; // player left the tab while these were in flight
     const leaderboardRowHTML = (pr, i, isMe)=>{
       const rank = HUNTER_RANKS[hunterRankIndex(pr.hunterXP||0)];
-      return `<div class="log-row" style="justify-content:space-between;${pr.highest?'cursor:pointer;':''}" data-highest-idx="${i}">
+      return `<div class="log-row" style="justify-content:space-between;cursor:pointer;" data-highest-idx="${i}">
         <span class="log-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i+1}. ${escapeHtml(pr.name)}${isMe?' (You)':''}</span>
         <span style="display:flex;align-items:center;gap:6px;flex:none;margin-left:6px;">
           <span style="flex:none;display:flex;">${miniRankBadge(rank)}</span>
@@ -4166,7 +4210,7 @@ function renderFriendsList(container){
       const all = await fetchAllHunterProfiles();
       if(currentTab!=='collection' || friendsBoardMode!=='global') return; // left the tab, or toggled back to Friends List, while this was loading
       const sortKey = globalPeriod==='daily' ? 'dailyXP' : globalPeriod==='weekly' ? 'weeklyXP' : 'hunterXP';
-      const fullBoard = [{profile:me}, ...all.filter(r=>r.code!==state.playerId)]
+      const fullBoard = [{profile:me, playerId:state.playerId}, ...all.filter(r=>r.code!==state.playerId).map(r=>({profile:r.profile, playerId:r.code}))]
         .sort((a,b)=> (b.profile[sortKey]||0)-(a.profile[sortKey]||0))
         .slice(0, GLOBAL_MAX_ROWS);
       if(globalPeriod==='alltime'){
@@ -4189,8 +4233,8 @@ function renderFriendsList(container){
         boardElNow.innerHTML = pageBoard.length? pageBoard.map((r,i)=> leaderboardRowHTML(r.profile, globalPage*GLOBAL_PAGE_SIZE+i, r.profile===me)).join('') : `<div class="hint">No other hunters found yet.</div>`;
         boardElNow.querySelectorAll('[data-highest-idx]').forEach(row=>{
           const idx = Number(row.dataset.highestIdx) - globalPage*GLOBAL_PAGE_SIZE;
-          const pr = pageBoard[idx] && pageBoard[idx].profile;
-          if(pr && pr.highest) row.addEventListener('click', ()=> openDetailModal(pr.highest, false, false));
+          const r = pageBoard[idx];
+          if(r) row.addEventListener('click', ()=> showFriendSnapshot(r.playerId, r.profile));
         });
       }
       return; // Friends section doesn't render in Global mode
@@ -4781,14 +4825,44 @@ function showItemDetailPopupCustom(name, visualHtml, descHtml){
   document.body.appendChild(overlay);
   document.getElementById('itemDetailOk2').addEventListener('click', ()=> overlay.remove());
 }
+const STAT_EXPLAINER = {power:'Power drives how much damage you land per hit.', guard:'Guard reduces how much damage you take per hit.', speed:'Speed nudges your odds in speed-sensitive moments like critical hits.', hp:'HP is your total health pool for the fight.'};
+const POTION_EFFECT_EXPLAINER = {
+  heal: 'Fully clears fatigue on the monster it\'s used on - no waiting for rest.',
+  buffPower: 'Applies only to the very next battle that monster fights, then it\'s used up.',
+  buffGuard: 'Applies only to the very next battle that monster fights, then it\'s used up.',
+  buffHp: 'Applies only to the very next battle that monster fights, then it\'s used up.',
+  buffFocus: 'Applies only to the very next battle that monster fights, then it\'s used up.',
+  phoenix: 'A full rest AND a huge damage boost, both from one potion - saved for the toughest fights.',
+};
+function richItemDetail(it){
+  const lines = [];
+  if(it.stat && it.stat==='all' && it.bonus){
+    lines.push(`Adds +${it.bonus} to every stat at once - Power, Guard, Speed, and HP.`);
+  } else if(it.stat && it.stat==='rest' && it.bonus){
+    lines.push(`Cuts that monster's rest time in half every time they need to recover.`);
+  } else if(it.stat && it.bonus && STAT_EXPLAINER[it.stat]){
+    lines.push(STAT_EXPLAINER[it.stat]);
+  }
+  if(it.alsoRest) lines.push(`Also halves rest time, on top of the stat bonus above.`);
+  if(it.recoil) lines.push(`Roughly a ${Math.round(it.recoil*100)}% chance per hit you take to counter-attack back for 40% of the damage you received.`);
+  if(it.effect && POTION_EFFECT_EXPLAINER[it.effect]) lines.push(POTION_EFFECT_EXPLAINER[it.effect]);
+  if(it.durationMs) lines.push(`Lasts ${Math.round(it.durationMs/60000)} minutes once activated.`);
+  if(it.guaranteed) lines.push(`Always succeeds - no chance involved.`);
+  if(it.burn) lines.push(`Also burns for an extra ${Math.round(it.burn[0]*100)}-${Math.round(it.burn[1]*100)}% of the opponent's current HP on every hit.`);
+  if(it.key && UPGRADE_ITEMS.some(u=>u.key===it.key)) lines.push(`Charms share ${MAX_EQUIP_SLOTS} equip slots per monster alongside any others you've equipped.`);
+  if(it.specialist) lines.push(`One of the rarest, most powerful items in the game.`);
+  return lines.join(' ');
+}
 function showItemDetailPopup(it, descFn, icon, color){
   const overlay = document.createElement('div');
   overlay.className='modal-overlay';
   const extra = it.reqLevel ? `<div class="hint" style="text-align:center;">Requires Level ${it.reqLevel}+${it.tier?' · '+RARITY_STYLE[it.tier].label+' tier':''}</div>` : '';
+  const detail = richItemDetail(it);
   overlay.innerHTML = `<div class="modal-box" style="max-width:300px;text-align:center;">
     <div class="cat-badge" style="background:${color};margin:0 auto 6px;">${icon}</div>
     <div class="pixel md">${it.name}</div>
     <div class="bio-text">${descFn(it)}</div>
+    ${detail? `<div class="bio-text" style="margin-top:6px;">${detail}</div>` : ''}
     ${extra}
     <div class="buttons-row"><button class="btn cream small full" id="itemDetailOk">Okay</button></div>
   </div>`;
@@ -5078,6 +5152,8 @@ function entryToBoss(e){
 function renderBossTrainingPrep(container, trainingBoss){
   const favs = favoritedSquad();
   const ready = favs.length>=5;
+  const chance = ready ? estimateBossWinChance(trainingBoss) : null;
+  const chanceColor = chance!==null ? hpBarColor(chance/100) : null;
   container.innerHTML = `
     <div class="buttons-row" style="margin-top:0;"><button class="btn tiny cream" id="bossTrainBackBtn">Back</button></div>
     <div style="text-align:center;">
@@ -5085,6 +5161,7 @@ function renderBossTrainingPrep(container, trainingBoss){
       <div class="float" style="width:90px;height:90px;margin:6px auto;display:flex;justify-content:center;align-items:center;">${monsterSVG(trainingBoss,90)}</div>
       <div class="pixel sm">Lv.${trainingBoss.level}</div>
     </div>
+    ${ready ? `<div style="display:flex;justify-content:flex-end;margin-bottom:4px;"><div style="background:${chanceColor};color:#fff;font-family:'Press Start 2P',monospace;font-size:8px;padding:4px 6px;border-radius:6px;white-space:nowrap;">${chance}% Chance of Win</div></div>` : ''}
     ${ready
       ? `<div class="hint">Same XP and coins as normal Arena training - no loot drops here, this is practice.</div><div class="buttons-row"><button class="btn coral small full" id="bossTrainBeginBtn">Begin Training Battle</button></div>`
       : `<div class="hint" style="color:#a13a24;">You need 5 favourites in your Squad to train against a Queen. (${favs.length}/5)</div><div class="buttons-row"><button class="btn cream small full" id="bossTrainGoSquad">Go to Squad</button></div>`}`;
@@ -5341,6 +5418,8 @@ function resolveBossTraining(boss, team, won, container){
         adRow.remove();
         const rosterEl = document.getElementById('btRoster');
         if(rosterEl) rosterEl.innerHTML = team.map(m=> `<div class="arena-roster-icon"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
+        const battleAgainBtnNow = document.getElementById('battleAgainBtn');
+        if(battleAgainBtnNow) battleAgainBtnNow.disabled = false;
         showToast("Rest skipped - your squad is ready!");
       });
     }));
@@ -5348,8 +5427,21 @@ function resolveBossTraining(boss, team, won, container){
   }
   saveState();
   const row=document.createElement('div'); row.className='buttons-row';
-  row.appendChild(mkBtn('yolk small full','Back to Boss Training', ()=> renderBossTraining(container)));
+  const stillTired = team.some(isTired);
+  row.appendChild(mkBtn('yolk small full','Battle Again', ()=>{ if(!team.some(isTired)) startBossTrainingBattle(boss, container); }));
   container.appendChild(row);
+  const battleAgainBtn = row.querySelector('button');
+  battleAgainBtn.id = 'battleAgainBtn';
+  if(battleAgainBtn) battleAgainBtn.disabled = stillTired;
+  if(stillTired){
+    const recheckTimer = setInterval(()=>{
+      if(!document.body.contains(battleAgainBtn)){ clearInterval(recheckTimer); return; }
+      if(!team.some(isTired)){ battleAgainBtn.disabled = false; clearInterval(recheckTimer); }
+    }, 2000);
+  }
+  const row2=document.createElement('div'); row2.className='buttons-row';
+  row2.appendChild(mkBtn('yolk small full','Back to Boss Training', ()=> renderBossTraining(container)));
+  container.appendChild(row2);
 }
 function activeBoostTimersHTML(){
   if(!state.activeBoosts) return '';
@@ -5698,14 +5790,12 @@ function theirSide(doc,kind){ return nearbyRole==='host'? doc[kind].guest : doc[
 function renderNearby(panel){
   if(!nearbyConfirmedName){
     panel.innerHTML = `
-      <div class="hint">Confirm the name the other hunter will see before you pair up.</div>
-      <div class="manual-row" style="margin-top:8px;"><input id="nearbyNameInput" value="${escapeHtml(state.hunterName||'')}" maxlength="15" placeholder="Your name" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px;box-sizing:border-box;text-align:center;"></div>
-      <div class="buttons-row"><button class="btn yolk small full" id="nearbyNameContinueBtn">Start Pairing</button></div>
+      <div class="hint">You'll pair as:</div>
+      <div class="coin-offer-display" style="font-size:18px;margin-top:4px;">${escapeHtml(state.hunterName||'Hunter')}</div>
+      <div class="hint" style="margin-top:8px;">Want a different name? Change it in Settings first, then come back here.</div>
+      <div class="buttons-row" style="margin-top:10px;"><button class="btn yolk small full" id="nearbyNameContinueBtn">Start Pairing</button></div>
       <div class="buttons-row"><button class="btn cream small full" id="nearbyNameBackBtn">Back</button></div>`;
     document.getElementById('nearbyNameContinueBtn').addEventListener('click', ()=>{
-      const name = document.getElementById('nearbyNameInput').value.trim();
-      if(!name){ showToast("Enter a name so the other hunter knows who they're playing"); return; }
-      state.hunterName = name.slice(0,15); saveState();
       nearbyConfirmedName = true;
       renderNearby(panel);
     });
@@ -6189,7 +6279,7 @@ function showNameAndSetup(){
       const name = input.value.trim();
       if(!name){ showToast("Enter a name to continue"); return; }
       if(isProfane(name)){ showToast("Please choose a different name"); return; }
-      state.hunterName = name; saveState();
+      state.hunterName = name; state.hunterCode = name; saveState();
       panel.innerHTML = '';
       screenEl.innerHTML = `<div id="onboardText" class="pixel sm" style="width:100%;box-sizing:border-box;text-align:left;line-height:1.7;font-size:11px;max-height:100%;overflow-y:auto;padding:6px 2px;"></div>`;
       typeLines(thanksLines(name), document.getElementById('onboardText'), ()=>{
