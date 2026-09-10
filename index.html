@@ -197,6 +197,7 @@
   .page-bar{display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:8px;}
   .tile-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;}
   .tile{position:relative; background:#fff; border-radius:12px; border:3px solid var(--rarity,#ccc); aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 3px 6px rgba(0,0,0,.18); transition:transform .1s ease;}
+  .tile.resting{filter:grayscale(0.85); opacity:.55;}
   .tile:active{transform:scale(.96);}
   .tile.holo{background:linear-gradient(120deg,#fff 0%, #fdf6e3 30%, #e9f7ff 55%, #fdf6e3 80%, #fff 100%); background-size:280% 280%; animation:holoshine 3.5s linear infinite;}
 
@@ -247,8 +248,7 @@
   .boost-badge{font-family:'Baloo 2',sans-serif; font-weight:800; font-size:10px; background:#9B5DE5; color:#fff; border-radius:999px; padding:4px 9px;}
   .tile-boosts{position:absolute; bottom:-6px; left:-6px; display:flex; flex-direction:column; gap:1px;}
   .tile-trophy{position:absolute; top:-6px; right:-6px; background:#fff; border:1.5px solid #1A1F1C; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center;}
-  .tile-resting{position:absolute; bottom:2px; left:2px; right:2px; background:rgba(26,31,28,.85); color:#fff; font-size:8px; font-weight:700; text-align:center; border-radius:5px; padding:2px 0;}
-  .tile-boost{background:#9B5DE5; color:#fff; font-family:'Baloo 2',sans-serif; font-weight:800; font-size:6.5px; border-radius:5px; padding:1px 3px; line-height:1.3;}
+    .tile-boost{background:#9B5DE5; color:#fff; font-family:'Baloo 2',sans-serif; font-weight:800; font-size:6.5px; border-radius:5px; padding:1px 3px; line-height:1.3;}
 
   /* Log (Almanac) - text-forward list, not tiles */
   .log-row{display:flex; align-items:center; gap:9px; background:#fff; border-radius:9px; padding:5px 9px; margin-bottom:4px; border-left:4px solid var(--rarity,#ccc); cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.12); transition:transform .08s ease;}
@@ -989,14 +989,11 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '3.0';
+const FIRMWARE_VERSION = '3.2';
 const FIRMWARE_CHANGELOG = [
-  'New: capture wild Queens! Buy a Smoker from the Specialist store, then defeat a Queen while holding one for a guaranteed capture',
-  'Captured Queens keep their real power and can join your Squad, level up, and use gear like any other Skrambeast',
-  'Difficulty now scales with how many Queens are in your Squad - in the Arena, against new wild Queens, and in The Hive',
-  'Maxed Queens show a crown badge instead of the usual trophy',
-  'New achievement: Royal Court, for capturing Queens',
-  '4 new Game Secrets',
+  'Fixed: could send yourself a battle request from your own leaderboard entry',
+  'Resting Squad members now grey out entirely instead of showing a sleeping emoji badge',
+  'Hive: the squad-select Back button is bigger and now says "Back to Battle Tab"',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -2065,11 +2062,15 @@ function showAchievementPopup(cat, tierIdx, onClose){
     <div class="pixel md" style="margin-top:6px;">${cat.name}</div>
     <div style="font-family:'Baloo 2',sans-serif;font-weight:800;font-size:20px;color:${color};margin:6px 0;">${tierName}</div>
     <div class="hint">+${formatCoins(reward)} coins</div>
-    ${achievementDoubleUsedThisBatch ? '' : `<div class="buttons-row"><button class="btn cream small full" id="achDoubleBtn">Watch Ad to Double</button></div>`}
-    <div class="buttons-row"><button class="btn yolk small full" id="achPopupClose">Nice!</button></div>
+    ${achievementDoubleUsedThisBatch ? '' : `<div class="buttons-row"><button class="btn cream small full" id="achDoubleBtn" disabled>Watch Ad to Double</button></div>`}
+    <div class="buttons-row"><button class="btn yolk small full" id="achPopupClose" disabled>Nice!</button></div>
   </div>`;
   document.body.appendChild(overlay);
   sfxAchievement();
+  setTimeout(()=>{
+    const closeBtn = document.getElementById('achPopupClose'); if(closeBtn) closeBtn.disabled = false;
+    const doubleBtn = document.getElementById('achDoubleBtn'); if(doubleBtn) doubleBtn.disabled = false;
+  }, 600);
   let resolved = false;
   const closeOnce = ()=>{ if(resolved) return; resolved = true; overlay.remove(); onClose(); };
   document.getElementById('achPopupClose').addEventListener('click', closeOnce);
@@ -2240,13 +2241,17 @@ function showRankUpCelebration(rank){
     <div class="pixel md" style="margin-top:6px;">You are now</div>
     <div style="font-family:'Baloo 2',sans-serif;font-weight:800;font-size:22px;color:${rank.color};margin:6px 0;">${rank.name}</div>
     <div class="buttons-row">
-      <button class="btn cream small" id="rankShareBtn">${iconLink()} Share</button>
-      <button class="btn yolk small" id="rankUpClose">Nice!</button>
+      <button class="btn cream small" id="rankShareBtn" disabled>${iconLink()} Share</button>
+      <button class="btn yolk small" id="rankUpClose" disabled>Nice!</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
   showFireworks(3000);
   sfxRankUp();
+  setTimeout(()=>{
+    const closeBtn = document.getElementById('rankUpClose'); if(closeBtn) closeBtn.disabled = false;
+    const shareBtn = document.getElementById('rankShareBtn'); if(shareBtn) shareBtn.disabled = false;
+  }, 600);
   document.getElementById('rankUpClose').addEventListener('click', ()=> overlay.remove());
   document.getElementById('rankShareBtn').addEventListener('click', ()=> shareRankUp(rank));
 }
@@ -3620,16 +3625,16 @@ function applyHiveOpponentGear(opponent, wave){
 }
 function renderHive(container){
   const favs = favoritedSquad();
-  const backBtnHtml = `<div class="buttons-row"><button class="btn tiny yolk" id="hiveBackToArenaBtn">Back</button></div>`;
+  const backBtnHtml = `<div class="buttons-row"><button class="btn yolk small full" id="hiveBackToArenaBtn">Back to Battle Tab</button></div>`;
   if(state.settings.autoFighter){
     container.innerHTML = `<div class="hint" style="color:#a13a24;text-align:center;padding:10px 0;">The Hive isn't available with Auto Fighter enabled - turn it off in Settings to enter.</div>${backBtnHtml}`;
-    document.getElementById('hiveBackToArenaBtn').addEventListener('click', ()=>{ versusCategory='arenaChoice'; renderVersus(document.getElementById('panel')); });
+    document.getElementById('hiveBackToArenaBtn').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(document.getElementById('panel')); });
     return;
   }
   if(favs.length===0){
     container.innerHTML = `<div class="hint" style="color:#a13a24;text-align:center;padding:10px 0;">You need at least 1 favourite in your Squad to enter The Hive.</div><div class="buttons-row"><button class="btn cream small full" id="hiveGoSquad">Go to Squad</button></div>${backBtnHtml}`;
     document.getElementById('hiveGoSquad').addEventListener('click', ()=> switchTab('collection'));
-    document.getElementById('hiveBackToArenaBtn').addEventListener('click', ()=>{ versusCategory='arenaChoice'; renderVersus(document.getElementById('panel')); });
+    document.getElementById('hiveBackToArenaBtn').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(document.getElementById('panel')); });
     return;
   }
   container.innerHTML = `
@@ -3638,7 +3643,7 @@ function renderHive(container){
     <div class="buttons-row"><button class="btn coral small full" id="hiveStartBtn" disabled>Enter The Hive</button></div>
     ${state.stats.hiveBestKillCount ? `<div class="hint" style="text-align:center;margin-top:6px;">Your best: ${state.stats.hiveBestKillCount} kills</div>` : ''}
     ${backBtnHtml}`;
-  document.getElementById('hiveBackToArenaBtn').addEventListener('click', ()=>{ versusCategory='arenaChoice'; renderVersus(document.getElementById('panel')); });
+  document.getElementById('hiveBackToArenaBtn').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(document.getElementById('panel')); });
   const rosterEl = document.getElementById('hiveRoster');
   let selectedId = null;
   rosterEl.innerHTML = favs.map(m=> `<div class="arena-roster-icon${isTired(m)?' tired':''}" data-fid="${m.id}" style="flex:0 0 auto;width:60px;"><div style="width:28px;height:28px;">${monsterSVG(m,28)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
@@ -3657,6 +3662,7 @@ function renderHive(container){
   });
 }
 function startHiveRun(fighter, container){
+  hiveRunActive = true;
   fighter.buffNextBattle = null; // wipe any existing potion/battle buffs before entry
   let kills = 0, totalXp = 0, totalCoins = 0;
   const lootCounts = {};
@@ -3687,7 +3693,6 @@ function startHiveRun(fighter, container){
       carriedHp = result.remainingFHp;
       if(result.won){
         const maxHpNow = effectiveStatsWithBuff(fighter).hp;
-        carriedHp = Math.min(maxHpNow, carriedHp + Math.round(maxHpNow*HIVE_HP_REGEN_PCT));
         kills++;
         const rewardMult = isQueenWave ? 3 : 1;
         const xpGain = Math.round((20+wave*1.5)*rewardMult);
@@ -3787,18 +3792,22 @@ function startHiveRun(fighter, container){
   }
 
   function endHiveRun(voluntary){
+    hiveRunActive = false;
     fighter.buffNextBattle = null;
     const restMs = kills*10000;
     fighter.tiredUntil = Date.now()+restMs; fighter.restTotalMs = restMs;
     state.stats.hiveBestKillCount = Math.max(state.stats.hiveBestKillCount||0, kills);
     saveState(); checkAchievements();
-    const lootList = Object.entries(lootCounts).map(([k,v])=>{ const name = k==='queensCrown' ? "Queen's Crown" : (POTION_ITEMS.find(x=>x.key===k)||{}).name || k; return `${v}x ${name}`; }).join(', ') || 'None';
+    const lootValue = Object.entries(lootCounts).reduce((sum,[k,v])=>{
+      const item = k==='queensCrown' ? COSTUME_ITEMS.find(x=>x.key==='queensCrown') : POTION_ITEMS.find(x=>x.key===k);
+      return sum + (item ? item.cost*v : 0);
+    }, 0);
     container.innerHTML = `
       ${celebrationHTML(voluntary,'RUN COMPLETE!')}
       <div class="log-row"><div class="log-info"><div class="log-name">Monsters Defeated</div></div><div class="log-status" style="background:#a13a24;">${kills}</div></div>
       <div class="log-row"><div class="log-info"><div class="log-name">Total XP Earned</div></div><div class="log-status" style="background:#9B5DE5;">${totalXp}</div></div>
       <div class="log-row"><div class="log-info"><div class="log-name">Total Coins Earned</div></div><div class="log-status" style="background:#D4A017;">${formatCoins(totalCoins)}</div></div>
-      <div class="log-row"><div class="log-info"><div class="log-name">Loot Found</div></div><div class="log-status" style="background:#3f6b4a;font-size:9px;">${lootList}</div></div>
+      <div class="log-row"><div class="log-info"><div class="log-name">Total Loot Value</div></div><div class="log-status" style="background:#3f6b4a;">${formatCoins(lootValue)}</div></div>
       <div class="hint" style="text-align:center;margin-top:8px;">${escapeHtml(fighter.name)} needs ${eggCountdownLabel(restMs)} to recover.</div>
       <div class="buttons-row"><button class="btn yolk small full" id="hiveBackBtn">Back to Arena</button></div>`;
     document.getElementById('hiveBackBtn').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(document.getElementById('panel')); });
@@ -4049,6 +4058,7 @@ function switchTab(name){
   if(bossBattleLocked && name!=='scan'){ showToast("You can't leave until the Queen fight is over!"); return; }
   if(wildBattleLocked && name!=='scan'){ showToast("Finish the fight before switching tabs!"); return; }
   if(nearbyDuelInProgress && name!=='versus'){ showToast("Finish the fight before switching tabs!"); return; }
+  if(hiveRunActive && name!=='versus'){ showToast("Finish or exit your Hive run before switching tabs!"); return; }
   currentTab = name;
   document.body.classList.toggle('vs-tab-active', name==='versus');
   document.querySelectorAll('.tab').forEach(t=> t.classList.toggle('active', t.dataset.tab===name));
@@ -4149,7 +4159,7 @@ function renderSquadGrid(panel){
   pageItems.forEach(m=>{
     const rs = RARITY_STYLE[m.rarity];
     const tile = document.createElement('div');
-    tile.className = 'tile'+(m.holo?' holo':'');
+    tile.className = 'tile'+(m.holo?' holo':'')+(isTired(m)?' resting':'');
     tile.dataset.rarity = m.rarity;
     tile.style.setProperty('--rarity', rs.color);
     const boostBadgeStr = m.favorite ? ['xp','coin','capture'].map(kind=>{
@@ -4158,7 +4168,7 @@ function renderSquadGrid(panel){
       const it = BOOST_ITEMS.find(x=>x.key===b.key);
       return it ? `<span class="tile-boost">${it.badge}</span>` : '';
     }).join('') : '';
-    tile.innerHTML = `<button class="tile-star">${iconStar(m.favorite)}</button><div class="tile-lvl">${m.level}</div><div class="tile-icon" style="${isTired(m)?'opacity:.45;':''}">${monsterSVG(m,34)}</div>${boostBadgeStr?`<div class="tile-boosts">${boostBadgeStr}</div>`:''}${isMaxed(m)?(m.isBoss?`<div class="tile-trophy" style="background:#D4A017;">${iconCrown()}</div>`:`<div class="tile-trophy">${iconTrophy(12,rs.color)}</div>`):''}${isTired(m)?`<div class="tile-resting">😴 Resting</div>`:''}`;
+    tile.innerHTML = `<button class="tile-star">${iconStar(m.favorite)}</button><div class="tile-lvl">${m.level}</div><div class="tile-icon">${monsterSVG(m,34)}</div>${boostBadgeStr?`<div class="tile-boosts">${boostBadgeStr}</div>`:''}${isMaxed(m)?(m.isBoss?`<div class="tile-trophy" style="background:#D4A017;">${iconCrown()}</div>`:`<div class="tile-trophy">${iconTrophy(12,rs.color)}</div>`):''}`;
     tile.querySelector('.tile-star').addEventListener('click', e=>{ e.stopPropagation(); toggleFavorite(m); renderSquadGrid(panel); });
     tile.addEventListener('click', ()=> openDetailModal(m, true));
     grid.appendChild(tile);
@@ -4484,7 +4494,7 @@ function myPublicProfile(){
   if(!state.weeklyXpBaseline || now - state.weeklyXpBaseline.start >= WEEK_MS){
     state.weeklyXpBaseline = { start: now, xp: state.hunterXP||0 };
   }
-  const snap = m=> ({barcode:m.barcode, name:m.name, type:m.type, typeLabel:m.typeLabel, typeColor:m.typeColor, typeDark:m.typeDark, rarity:m.rarity, holo:m.holo, hueShift:m.hueShift, level:m.level, bio:m.bio, traits:Object.assign({},m.traits), stats:Object.assign({},m.stats), weapon:m.weapon||null, armor:m.armor||null, shield:m.shield||null, costume:m.costume||null});
+  const snap = m=> ({barcode:m.barcode, name:m.name, type:m.type, typeLabel:m.typeLabel, typeColor:m.typeColor, typeDark:m.typeDark, rarity:m.rarity, holo:m.holo, hueShift:m.hueShift, level:m.level, bio:m.bio, traits:Object.assign({},m.traits), stats:Object.assign({},m.stats), weapon:m.weapon||null, armor:m.armor||null, shield:m.shield||null, costume:m.costume||null, isBoss:m.isBoss||false});
   return {
     name: state.hunterName||'Hunter',
     totalWins: state.stats.totalWins, totalFights: state.stats.totalFights, bestStreak: state.stats.bestStreak,
@@ -4495,6 +4505,8 @@ function myPublicProfile(){
     dailyXP: Math.max(0, (state.hunterXP||0) - state.dailyXpBaseline.xp),
     weeklyXP: Math.max(0, (state.hunterXP||0) - state.weeklyXpBaseline.xp),
     maxedCount: state.collection.filter(isMaxed).length,
+    maxedByRarity: RARITY_ORDER.reduce((acc,r)=>{ acc[r] = state.collection.filter(m=> isMaxed(m) && m.rarity===r && !m.isBoss).length; return acc; }, {}),
+    maxedQueens: state.collection.filter(m=> isMaxed(m) && m.isBoss).length,
     lastSeen: now
   };
 }
@@ -4742,11 +4754,18 @@ function showFriendSnapshot(friendPlayerId, pr){
       <button class="btn tiny cream" id="fsClose" style="position:absolute;top:10px;right:10px;">${iconClose()}</button>
       <div class="pixel md" style="text-align:center;">${escapeHtml(pr.name)}</div>
       <div class="log-row"><div class="log-info"><div class="log-meta">Wins ${pr.totalWins||0} · Fights ${pr.totalFights||0} · Best streak ${pr.bestStreak||0}</div></div></div>
+      <div class="pixel sm" style="margin-top:6px;">Max Level Trophies</div>
+      <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">${(()=>{
+        const mb = pr.maxedByRarity||{};
+        const trophies = RARITY_ORDER.filter(r=> (mb[r]||0)>0).map(r=> `<div style="display:flex;align-items:center;gap:2px;">${iconTrophy(14,RARITY_STYLE[r].color)}<span class="pixel sm">${mb[r]}</span></div>`);
+        if((pr.maxedQueens||0)>0) trophies.push(`<div style="display:flex;align-items:center;gap:2px;">${iconCrown()}<span class="pixel sm">${pr.maxedQueens}</span></div>`);
+        return trophies.length ? trophies.join('') : '<div class="hint">None yet</div>';
+      })()}</div>
       <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
       <div class="log-row" id="fsHighestRow" style="${pr.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${pr.highest? pr.highest.name+' - Lv.'+pr.highest.level+' ('+(pr.highest.isBoss?'Queen':RARITY_STYLE[pr.highest.rarity].label)+')' : '-'}</div></div></div>
       <div class="pixel sm" style="margin-top:8px;">Squad</div>
       <div class="arena-roster" id="fsSquadRoster" style="margin-top:4px;"></div>
-      <div class="buttons-row" style="margin-top:12px;"><button class="btn coral small full" id="fsBattleReq">Send Battle Request</button></div>
+      ${friendPlayerId===ensurePlayerId() ? `<div class="hint" style="text-align:center;margin-top:12px;">This is you!</div>` : `<div class="buttons-row" style="margin-top:12px;"><button class="btn coral small full" id="fsBattleReq">Send Battle Request</button></div>`}
     </div>`;
   document.body.appendChild(overlay);
   document.getElementById('fsClose').addEventListener('click', ()=> overlay.remove());
@@ -4755,13 +4774,14 @@ function showFriendSnapshot(friendPlayerId, pr){
   const squadRoster = document.getElementById('fsSquadRoster');
   const squad = pr.squad||[];
   squadRoster.innerHTML = squad.length
-    ? squad.map(m=> `<div class="arena-roster-icon" data-squad-idx="${squad.indexOf(m)}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('')
+    ? squad.map(m=> { const rs = RARITY_STYLE[m.rarity]; const badge = isMaxed(m) ? (m.isBoss ? `<div class="tile-trophy" style="background:#D4A017;">${iconCrown()}</div>` : `<div class="tile-trophy">${iconTrophy(12,rs.color)}</div>`) : ''; return `<div class="arena-roster-icon" style="position:relative;" data-squad-idx="${squad.indexOf(m)}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span>${badge}</div>`; }).join('')
     : `<div class="hint">No favourited squad yet.</div>`;
   squadRoster.querySelectorAll('[data-squad-idx]').forEach(el=>{
     const m = squad[Number(el.dataset.squadIdx)];
     if(m) el.addEventListener('click', ()=> openDetailModal(m, false, false));
   });
-  document.getElementById('fsBattleReq').addEventListener('click', async ()=>{
+  const battleReqBtn = document.getElementById('fsBattleReq');
+  if(battleReqBtn) battleReqBtn.addEventListener('click', async ()=>{
     if(!friendPlayerId){ showToast("Can't reach this hunter right now"); return; }
     overlay.remove();
     showBattleRequestWaiting(friendPlayerId, pr.name);
@@ -5531,14 +5551,19 @@ function renderSpecialist(container, panel){
     ...SPECIALIST_EXTRA.map(it=>({...it, kind:'global'}))
   ].sort((a,b)=> a.cost-b.cost);
   pool.forEach(it=>{
-    const affordable = state.coins >= it.cost, owned = state.inventory[it.key]||0;
+    if(state.coins >= it.cost){
+      if(!state.specialistRevealed) state.specialistRevealed = [];
+      if(!state.specialistRevealed.includes(it.key)) state.specialistRevealed.push(it.key);
+    }
+    const everRevealed = (state.specialistRevealed||[]).includes(it.key);
+    const affordable = everRevealed, canBuyNow = state.coins >= it.cost, owned = state.inventory[it.key]||0;
     const row = document.createElement('div'); row.className='store-item';
     row.style.background = affordable? '#fff8e6':'#1a1f1c';
     row.style.borderColor = affordable? '#D4A017':'#000';
     row.innerHTML = affordable ? `
       <div class="cat-badge" style="background:#D4A017">${iconCrown()}</div>
       <div class="sinfo"><div class="sname">${it.name}${owned?` <span class="sowned">×${owned}</span>`:''}</div><div class="sdesc">${it.desc}</div></div>
-      <button class="btn tiny yolk" style="font-size:11px;padding:6px 10px;">${iconCoin()} ${formatCoins(it.cost)}</button>
+      <button class="btn tiny yolk" style="font-size:11px;padding:6px 10px;${canBuyNow?'':'opacity:.5;'}">${iconCoin()} ${formatCoins(it.cost)}</button>
     ` : `
       <div class="cat-badge" style="background:#000; width:22px; height:22px;">${iconLock()}</div>
       <div class="sinfo"><div class="sname" style="color:#D4A017; letter-spacing:1.5px; font-size:11px;">?????? <span style="color:#8a8f86; font-weight:400; letter-spacing:0; font-family:'Rubik';">- needs ${formatCoins(it.cost)}</span></div></div>
@@ -5549,10 +5574,10 @@ function renderSpecialist(container, panel){
       row.querySelector('.sinfo').addEventListener('click', ()=>{
         showItemDetailPopupCustom(it.name, `<div class="cat-badge" style="background:#D4A017;margin:0 auto 8px;">${iconCrown()}</div>`, `${it.desc} Costs ${formatCoins(it.cost)}.`);
       });
-      row.querySelector('button').addEventListener('click', ()=>{
+      if(canBuyNow) row.querySelector('button').addEventListener('click', ()=>{
         state.coins -= it.cost; refreshCoinBadges();
         sfxCoin();
-        if(it.kind==='global'){ state.nextCatchGuaranteed=true; showToast(`${it.name} consumed - your next catch is guaranteed Legendary!`); }
+        if(it.key==='genesisShard'){ state.nextCatchGuaranteed=true; showToast(`${it.name} consumed - your next catch is guaranteed Legendary!`); }
         else { state.inventory[it.key]=(state.inventory[it.key]||0)+1; showToast(`${it.name} added to inventory`); }
         saveState(); renderStore(panel);
       });
@@ -6642,6 +6667,7 @@ function evaluateNearbyBattle(){
   }
 }
 let nearbyDuelInProgress = false;
+let hiveRunActive = false;
 function renderNearbyBattle(container, panel){
   const doc = nearbyDoc, mine = mySide(doc,'battle'), theirs = theirSide(doc,'battle');
   if(mine.ready && theirs.ready && mine.myResult && theirs.myResult){
