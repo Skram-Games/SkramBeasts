@@ -554,6 +554,7 @@ function achievementIcon(key){
       return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z" fill="none" stroke="#fff" stroke-width="1.6"/></svg>`;
     case 'hiveLegendarySlayer': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l2.4 6.6L21 10l-5.5 4.2L17 21l-5-3.6L7 21l1.5-6.8L3 10l6.6-1.4z" fill="#fff"/></svg>`;
     case 'hiveFullyStocked': return `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="4" width="7" height="7" fill="#fff"/><rect x="13" y="4" width="7" height="7" fill="#fff" opacity=".7"/><rect x="4" y="13" width="7" height="7" fill="#fff" opacity=".7"/><rect x="13" y="13" width="7" height="7" fill="#fff" opacity=".4"/></svg>`;
+    case 'royalCourt': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 18h16l-1.5-9-4 4-2.5-6-2.5 6-4-4L4 18z" fill="#fff"/></svg>`;
     default: return '';
   }
 }
@@ -988,9 +989,14 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '2.7';
+const FIRMWARE_VERSION = '3.0';
 const FIRMWARE_CHANGELOG = [
-  'Boss Training and Queen battles: Special Attack bar moved under the health bar, matching The Hive - tap circle is now properly centred',
+  'New: capture wild Queens! Buy a Smoker from the Specialist store, then defeat a Queen while holding one for a guaranteed capture',
+  'Captured Queens keep their real power and can join your Squad, level up, and use gear like any other Skrambeast',
+  'Difficulty now scales with how many Queens are in your Squad - in the Arena, against new wild Queens, and in The Hive',
+  'Maxed Queens show a crown badge instead of the usual trophy',
+  'New achievement: Royal Court, for capturing Queens',
+  '4 new Game Secrets',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1272,6 +1278,12 @@ function generateBoss(code){
   boss.stats.hp = Math.round(boss.stats.hp * 6);
   boss.stats.power = Math.round(boss.stats.power * 1.8);
   boss.stats.guard = Math.round(boss.stats.guard * 1.6);
+  const qMult = queenSquadMultiplier();
+  if(qMult>1){
+    boss.stats.hp = Math.round(boss.stats.hp*qMult);
+    boss.stats.power = Math.round(boss.stats.power*qMult);
+    boss.stats.guard = Math.round(boss.stats.guard*qMult);
+  }
   boss.name = 'Queen ' + boss.name;
   boss.defaultName = boss.name;
   boss.isBoss = true;
@@ -1595,6 +1607,22 @@ function resolveBossBattle(boss, team, won){
     const note=document.createElement('div'); note.className='hint'; note.style.textAlign='center';
     note.innerHTML = `+${formatCoins(coinReward)} coins · +${xpEach} XP each · Found: ${loot.name}${crownDropped?"<br><b style=\"color:#D4A017;\">She dropped her Crown!</b>":''}<br>Boss Training is now unlocked!`;
     panelEl.appendChild(note);
+    if((state.inventory.smoker||0)>0){
+      const captureNote = document.createElement('div'); captureNote.className='hint'; captureNote.style.textAlign='center'; captureNote.style.marginTop='6px';
+      captureNote.innerHTML = `You have a Smoker - use it to capture ${boss.name}?`;
+      panelEl.appendChild(captureNote);
+      const captureRow = document.createElement('div'); captureRow.className='buttons-row';
+      captureRow.appendChild(mkBtn('coral small full', `Use Smoker to Capture`, ()=>{
+        state.inventory.smoker -= 1;
+        boss.favorite = false;
+        state.collection.push(boss);
+        state.stats.queensCaptured = (state.stats.queensCaptured||0)+1;
+        saveState(); checkAchievements();
+        captureRow.remove(); captureNote.innerHTML = `<b style="color:#3f9142;">${boss.name} joined your Squad!</b>`;
+        showToast(`${boss.name} captured!`);
+      }));
+      panelEl.appendChild(captureRow);
+    }
   } else {
     state.stats.bossDefeats = (state.stats.bossDefeats||0)+1;
     const restUntil = Date.now()+25*60000;
@@ -1982,6 +2010,7 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'hiveLegendarySlayer', name:'Against the Odds', desc:'Defeat Legendary-tier Hive opponents', guide:'Push deep enough into The Hive and the opponents you face start skewing toward Legendary rarity - defeat some of them.', getValue: ()=> state.stats.hiveLegendaryWins||0, tiers:[1,5,20,75,200]},
   {key:'hiveFullyStocked', name:'Fully Stocked', desc:'Try every Hive checkpoint bonus', guide:'Every time you reach a checkpoint in The Hive, you can pick one free bonus. Try all 5 different kinds across your runs.', getValue: ()=> (state.hiveShopKeysUsed||[]).length, tiers:[1,2,3,4,5]},
   {key:'hiveRegular', name:'Checkpoint Regular', desc:'Reach Hive checkpoints', guide:'Every 25 kills in The Hive triggers a checkpoint - reach enough of them, across as many runs as it takes.', getValue: ()=> state.stats.hiveCheckpointsReached||0, tiers:[1,5,20,50,150]},
+  {key:'royalCourt', name:'Royal Court', desc:'Capture wild Queens', guide:'Buy a Smoker from the Specialist store, then defeat a wild Queen while holding one for a guaranteed capture. The top tier means enough Queens for a full squad of 5.', getValue: ()=> state.stats.queensCaptured||0, tiers:[1,2,3,4,5]},
   {key:'globalAce', name:'Global Ace', desc:"Rank on the Global leaderboard", guide:"Open Friends > Global to see how you stack up against every hunter, not just your friends. Earning more Hunter XP climbs you higher - the top 20 make the board at all.", getValue: ()=> state.stats.bestGlobalRank ? Math.max(0, 21-state.stats.bestGlobalRank) : 0, tiers:[1,11,16,18,20]},
 ];
 function achievementsUnlockedCount(){
@@ -2487,6 +2516,7 @@ const SHIELD_ITEMS = [
 ];
 const SPECIALIST_EXTRA = [
   {key:'genesisShard', name:'Genesis Shard', desc:'Guarantees your very next catch is Legendary', cost:250000000},
+  {key:'smoker', name:'Smoker', desc:'Defeat a wild Queen while holding one to capture her, guaranteed - no chance involved', cost:100000},
 ];
 const COSTUME_ITEMS = [
   {key:'championBelt', name:'Champion Belt', desc:'Purely cosmetic - visible on your Skrambeast', cost:150},
@@ -2567,6 +2597,10 @@ function restRemainingLabel(m){
   return Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0');
 }
 function favoritedSquad(){ return state.collection.filter(m=>m.favorite); }
+function queenSquadMultiplier(favs){
+  const queenCount = (favs||favoritedSquad()).filter(m=>m.isBoss).length;
+  return 1 + queenCount*0.15;
+}
 function toggleFavorite(m){
   if(!m.favorite && favoritedSquad().length>=MAX_FAVORITES){
     showToast(`You can only favourite ${MAX_FAVORITES} - unfavourite one first to swap`);
@@ -3636,6 +3670,11 @@ function startHiveRun(fighter, container){
     const rarity = hiveWaveRarity(wave);
     const fakeBarcode = 'hive-'+Date.now()+'-'+Math.floor(Math.random()*100000);
     const opponent = isQueenWave ? generateHiveQueen(wave) : generateMonster(fakeBarcode, rarity, level, true);
+    if(fighter.isBoss){
+      opponent.stats.power = Math.round(opponent.stats.power*1.15);
+      opponent.stats.guard = Math.round(opponent.stats.guard*1.15);
+      opponent.stats.hp = Math.round(opponent.stats.hp*1.15);
+    }
     if(!isQueenWave) applyHiveOpponentGear(opponent, wave);
     logAlmanac(opponent, 'seen');
     fighter.buffNextBattle = activeShopBuff; // re-applied every wave since runTapBattle consumes it on each call
@@ -4119,7 +4158,7 @@ function renderSquadGrid(panel){
       const it = BOOST_ITEMS.find(x=>x.key===b.key);
       return it ? `<span class="tile-boost">${it.badge}</span>` : '';
     }).join('') : '';
-    tile.innerHTML = `<button class="tile-star">${iconStar(m.favorite)}</button><div class="tile-lvl">${m.level}</div><div class="tile-icon" style="${isTired(m)?'opacity:.45;':''}">${monsterSVG(m,34)}</div>${boostBadgeStr?`<div class="tile-boosts">${boostBadgeStr}</div>`:''}${isMaxed(m)?`<div class="tile-trophy">${iconTrophy(12,rs.color)}</div>`:''}${isTired(m)?`<div class="tile-resting">😴 Resting</div>`:''}`;
+    tile.innerHTML = `<button class="tile-star">${iconStar(m.favorite)}</button><div class="tile-lvl">${m.level}</div><div class="tile-icon" style="${isTired(m)?'opacity:.45;':''}">${monsterSVG(m,34)}</div>${boostBadgeStr?`<div class="tile-boosts">${boostBadgeStr}</div>`:''}${isMaxed(m)?(m.isBoss?`<div class="tile-trophy" style="background:#D4A017;">${iconCrown()}</div>`:`<div class="tile-trophy">${iconTrophy(12,rs.color)}</div>`):''}${isTired(m)?`<div class="tile-resting">😴 Resting</div>`:''}`;
     tile.querySelector('.tile-star').addEventListener('click', e=>{ e.stopPropagation(); toggleFavorite(m); renderSquadGrid(panel); });
     tile.addEventListener('click', ()=> openDetailModal(m, true));
     grid.appendChild(tile);
@@ -4504,7 +4543,7 @@ function renderProfile(container, panel){
     <div class="log-row"><div class="log-info"><div class="log-name">${p.name}</div><div class="log-meta">Wins ${p.totalWins} · Fights ${p.totalFights} · Best streak ${p.bestStreak} · Hive Streak: ${state.stats.hiveBestKillCount||0} · K:D ${kd} · ${achievementsUnlockedCount()}/${ACHIEVEMENT_CATEGORIES.length*5} Achievements</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Hunter Rank</div><div class="log-meta">Current Rank: ${rank.name}<br>${rankProgress}</div></div></div>
     <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
-    <div class="log-row" id="highestBeastRow" style="${p.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${p.highest? p.highest.name+' - Lv.'+p.highest.level+' ('+RARITY_STYLE[p.highest.rarity].label+')'+(p.highest.level>=MAX_LEVEL_BY_RARITY[p.highest.rarity]?` ${iconTrophy(13,RARITY_STYLE[p.highest.rarity].color)}`:'') : '-'}</div></div></div>
+    <div class="log-row" id="highestBeastRow" style="${p.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${p.highest? p.highest.name+' - Lv.'+p.highest.level+' ('+(p.highest.isBoss?'Queen':RARITY_STYLE[p.highest.rarity].label)+')'+(p.highest.level>=MAX_LEVEL_BY_RARITY[p.highest.rarity]?` ${iconTrophy(13,RARITY_STYLE[p.highest.rarity].color)}`:'') : '-'}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Max Level Trophies (${trophyCount})</div><div class="log-meta">${trophyRow}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Recent Achievements</div><div class="log-meta">${achRow}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Secrets Known</div></div><div class="log-status" id="secretsKnownBadge" style="${easterEggStepDone('egg1','a')?'background:#1A1F1C;color:#fff;':'background:#D4A017;'}">${secretsKnownCount()}/${GAME_SECRETS.length}</div></div>`;
@@ -4704,7 +4743,7 @@ function showFriendSnapshot(friendPlayerId, pr){
       <div class="pixel md" style="text-align:center;">${escapeHtml(pr.name)}</div>
       <div class="log-row"><div class="log-info"><div class="log-meta">Wins ${pr.totalWins||0} · Fights ${pr.totalFights||0} · Best streak ${pr.bestStreak||0}</div></div></div>
       <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
-      <div class="log-row" id="fsHighestRow" style="${pr.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${pr.highest? pr.highest.name+' - Lv.'+pr.highest.level+' ('+RARITY_STYLE[pr.highest.rarity].label+')' : '-'}</div></div></div>
+      <div class="log-row" id="fsHighestRow" style="${pr.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${pr.highest? pr.highest.name+' - Lv.'+pr.highest.level+' ('+(pr.highest.isBoss?'Queen':RARITY_STYLE[pr.highest.rarity].label)+')' : '-'}</div></div></div>
       <div class="pixel sm" style="margin-top:8px;">Squad</div>
       <div class="arena-roster" id="fsSquadRoster" style="margin-top:4px;"></div>
       <div class="buttons-row" style="margin-top:12px;"><button class="btn coral small full" id="fsBattleReq">Send Battle Request</button></div>
@@ -4840,7 +4879,11 @@ const GAME_SECRETS = [
   "The scanner's laser sweep is pure show - the moment you scan is already decided before the animation even starts.",
   "Battling a wild monster before trying to catch it weakens it, raising your capture chance.",
   "One Specialist charm doesn't pick a favourite stat - it lifts all of them at once, for hunters who've done well for themselves.",
-  "A monster that beats you gets away for good - no immediate rematch, so bring your best."
+  "A monster that beats you gets away for good - no immediate rematch, so bring your best.",
+  "Her crown doesn't just sit there for decoration. During the encounter itself, before any fighting starts, try tapping it - patience and a bit of rhythm are rewarded.",
+  "Somewhere in the Specialist shelf sits a tool that turns a fair fight into something permanent. The trick is holding it before she falls, not after.",
+  "A captured Queen doesn't get quietly weaker to fit in. Whatever made her worth fighting in the first place, she brings every bit of it home with her.",
+  "The more Queens stand at your side, the less anything else stands a chance - and the less mercy the next Queen you meet is likely to show you either."
 
 ];
 const SECRET_COST = 2500;
@@ -6017,6 +6060,12 @@ function ensureArenaOpponent(){
     const favs = favoritedSquad();
     const avgLevel = favs.length ? Math.round(favs.reduce((s,m)=>s+m.level,0)/favs.length) : 1;
     arenaOpponent = generateMonster(fakeBarcode, null, avgLevel, true);
+    const qMult = queenSquadMultiplier(favs);
+    if(qMult>1){
+      arenaOpponent.stats.power = Math.round(arenaOpponent.stats.power*qMult);
+      arenaOpponent.stats.guard = Math.round(arenaOpponent.stats.guard*qMult);
+      arenaOpponent.stats.hp = Math.round(arenaOpponent.stats.hp*qMult);
+    }
     arenaOpponentResolved = false;
     logAlmanac(arenaOpponent, 'seen');
   }
@@ -6033,7 +6082,7 @@ function renderArenaVsRow(container, battleHost){
   container.innerHTML = `
     <div class="arena-vs-cols">
       <div class="arena-vs-col" id="arenaPlayerCol">${fighter
-        ? `<div class="float" style="width:70px;height:70px;margin:0 auto;">${monsterSVG(fighter,70)}</div><div class="pixel sm">${fighter.name}</div><div class="hint">${RARITY_STYLE[fighter.rarity].label} · Lv.${fighter.level}</div>`
+        ? `<div class="float" style="width:70px;height:70px;margin:0 auto;">${monsterSVG(fighter,70)}</div><div class="pixel sm">${fighter.name}</div><div class="hint">${fighter.isBoss?'Queen':RARITY_STYLE[fighter.rarity].label} · Lv.${fighter.level}</div>`
         : `<div class="hint">${allTired?'Whole squad resting':'Pick a fighter above'}</div>${allTired?`<div class="hint" id="arenaRestCountdown" style="font-weight:700;">Ready in ${Math.floor(Math.max(0,soonestReadyMs)/60000)}:${Math.ceil((Math.max(0,soonestReadyMs)%60000)/1000).toString().padStart(2,'0')}</div>`:''}`}</div>
       <div class="arena-vs-badge">VS</div>
       <div class="arena-vs-col${easterEggStepDone('egg2','c')?' cracked-glass':''}" id="arenaOpponentCol">
