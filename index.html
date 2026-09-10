@@ -197,7 +197,7 @@
   .page-bar{display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:8px;}
   .tile-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;}
   .tile{position:relative; background:#fff; border-radius:12px; border:3px solid var(--rarity,#ccc); aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 3px 6px rgba(0,0,0,.18); transition:transform .1s ease;}
-  .tile.resting{filter:grayscale(0.85); opacity:.55;}
+  .tile.resting{opacity:.45;}
   .tile:active{transform:scale(.96);}
   .tile.holo{background:linear-gradient(120deg,#fff 0%, #fdf6e3 30%, #e9f7ff 55%, #fdf6e3 80%, #fff 100%); background-size:280% 280%; animation:holoshine 3.5s linear infinite;}
 
@@ -242,7 +242,7 @@
   body.colorblind-safe .tile[data-rarity="legendary"]{ border-style:groove; border-width:5px; }
   @keyframes holoshine{0%{background-position:0% 50%;}100%{background-position:100% 50%;}}
   .tile-icon{width:80%; height:80%; overflow:hidden; border-radius:8px;}
-  .tile-icon svg{width:100%; height:100%; filter:drop-shadow(0 3px 2px rgba(0,0,0,.25));}
+  .tile-icon svg{width:100%; height:100%;}
   .tile-star{position:absolute; top:-6px; left:-6px; background:#fff; border:2px solid #0d2027; border-radius:50%; width:24px; height:24px; padding:0; display:flex; align-items:center; justify-content:center; cursor:pointer;}
   .tile-lvl{position:absolute; bottom:-6px; right:-6px; background:var(--ink); color:var(--cream); font-family:'Baloo 2'; font-weight:800; font-size:10.5px; border-radius:7px; padding:2px 5px;}
   .boost-badge{font-family:'Baloo 2',sans-serif; font-weight:800; font-size:10px; background:#9B5DE5; color:#fff; border-radius:999px; padding:4px 9px;}
@@ -989,11 +989,9 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '3.2';
+const FIRMWARE_VERSION = '3.5';
 const FIRMWARE_CHANGELOG = [
-  'Fixed: could send yourself a battle request from your own leaderboard entry',
-  'Resting Squad members now grey out entirely instead of showing a sleeping emoji badge',
-  'Hive: the squad-select Back button is bigger and now says "Back to Battle Tab"',
+  'Hardened every multi-monster grid in the game against the GPU-compositor glitch (Squad, Journal, Arena, Boss Training, Friend Snapshot, Player VS Player, and more) - kept the per-monster colour variation, closed the risk around it instead',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1411,10 +1409,8 @@ function renderBossEncounter(){
     <div class="hp-bar-wrap" style="width:120px;margin:4px auto;"><div class="hp-bar-fill" style="background:#3f9142;width:100%;"></div></div>
     <div class="pixel sm" style="text-align:center;color:#a13a24;text-shadow:1px 1px 0 rgba(255,255,255,.4);">${boss.name}</div>
     <div class="pixel sm" style="text-align:center;color:var(--lcd-ink);text-shadow:1px 1px 0 rgba(255,255,255,.4);">Lv.${boss.level} · Queen</div>`;
-  const canTapCrown = !state.inventory.queensCrown;
   panelEl.innerHTML = `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:4px;"><div style="background:${chanceColor};color:#fff;font-family:'Press Start 2P',monospace;font-size:8px;padding:4px 6px;border-radius:6px;white-space:nowrap;">${chance}% Chance of Win</div></div>
-    ${canTapCrown ? `<div class="log-row" id="crownTapRow" style="cursor:pointer;justify-content:center;"><div class="pixel sm" id="crownTapLabel">👑 Try to snatch her crown? (0/10)</div></div>` : ''}
+    <div style="font-size:9px;color:${chanceColor};opacity:.9;font-family:'Rubik',sans-serif;text-align:center;font-weight:700;">${chance}% Chance of Win</div>
     <div class="hint" style="${ready?'':'color:#a13a24;'}">${ready
       ? "Bring your 5 favourites - this will be a real fight, and you can't back out once it starts. Worth a stop at the Store beforehand to gear up!"
       : `You need 5 favourites in your Squad to challenge a Queen. (${favs.length}/5 ready)`}</div>
@@ -1423,27 +1419,38 @@ function renderBossEncounter(){
       : `<div class="buttons-row"><button class="btn cream small full" id="bossGoSquad">Go to Squad</button></div>`}`;
   if(ready) document.getElementById('bossBeginBtn').addEventListener('click', startBossBattle);
   else document.getElementById('bossGoSquad').addEventListener('click', ()=> switchTab('collection'));
-  if(canTapCrown){
-    let taps = 0;
-    const tapRow = document.getElementById('crownTapRow');
-    const tapLabel = document.getElementById('crownTapLabel');
-    tapRow.addEventListener('click', ()=>{
-      taps++;
-      sfxEggTap();
-      if(taps>=10){
-        state.inventory.queensCrown = (state.inventory.queensCrown||0)+1;
-        state.stats.crownsLifetime = (state.stats.crownsLifetime||0)+1;
-        saveState(); checkAchievements();
-        showToast("You snatched her crown!");
-        sfxCaptureSuccess();
-        tapRow.remove();
-        return;
-      }
-      tapLabel.textContent = `👑 Try to snatch her crown? (${taps}/10)`;
-      if(taps%3===0){
-        tapLabel.classList.remove('egg-wiggle'); void tapLabel.offsetWidth; tapLabel.classList.add('egg-wiggle');
-      }
-    });
+  if(!playerHasAnyCrown()){
+    const crownEl = document.getElementById('queenCrownHit-'+boss.barcode);
+    if(crownEl){
+      crownEl.style.cursor = 'pointer';
+      crownEl.style.transformBox = 'fill-box';
+      crownEl.style.transformOrigin = 'center';
+      let taps = 0, hinted = false;
+      crownEl.addEventListener('click', ()=>{
+        taps++;
+        sfxEggTap();
+        crownEl.classList.remove('egg-wiggle'); void crownEl.getBBox(); crownEl.classList.add('egg-wiggle');
+        if(!hinted && taps>=5){
+          hinted = true;
+          showToast("That crown looks loose...");
+        }
+        if(taps>=10){
+          state.inventory.queensCrown = (state.inventory.queensCrown||0)+1;
+          state.stats.crownsLifetime = (state.stats.crownsLifetime||0)+1;
+          saveState(); checkAchievements();
+          sfxCaptureSuccess();
+          const overlay = document.createElement('div'); overlay.className='modal-overlay';
+          overlay.innerHTML = `<div class="modal-box" style="max-width:280px;text-align:center;">
+            ${celebrationHTML(true,'CROWN STOLEN!')}
+            <div class="float" style="width:70px;height:70px;margin:8px auto;">${costumeSVG('queensCrown')?`<svg viewBox="28 -20 44 30" width="70" height="70">${costumeSVG('queensCrown')}</svg>`:''}</div>
+            <div class="pixel sm">You snatched ${boss.name}'s Crown!</div>
+            <div class="buttons-row"><button class="btn yolk small full" id="crownStolenClose">Nice!</button></div>
+          </div>`;
+          document.body.appendChild(overlay);
+          document.getElementById('crownStolenClose').addEventListener('click', ()=> overlay.remove());
+        }
+      });
+    }
   }
 }
 function startBossBattle(){
@@ -1484,6 +1491,7 @@ function startBossBattle(){
 
   function renderRoster(){
     rosterEl.innerHTML = team.map((m,i)=> `<div class="arena-roster-icon${i===activeIdx?' selected':''}" style="${fainted[i]?'opacity:.3;':''}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
+    void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
   }
   function updateBars(){
     const wPct=Math.max(0,wHp)/maxWHp; bossBar.style.width=(wPct*100)+'%'; bossBar.style.background=hpBarColor(wPct);
@@ -1604,22 +1612,31 @@ function resolveBossBattle(boss, team, won){
     const note=document.createElement('div'); note.className='hint'; note.style.textAlign='center';
     note.innerHTML = `+${formatCoins(coinReward)} coins · +${xpEach} XP each · Found: ${loot.name}${crownDropped?"<br><b style=\"color:#D4A017;\">She dropped her Crown!</b>":''}<br>Boss Training is now unlocked!`;
     panelEl.appendChild(note);
-    if((state.inventory.smoker||0)>0){
-      const captureNote = document.createElement('div'); captureNote.className='hint'; captureNote.style.textAlign='center'; captureNote.style.marginTop='6px';
-      captureNote.innerHTML = `You have a Smoker - use it to capture ${boss.name}?`;
-      panelEl.appendChild(captureNote);
-      const captureRow = document.createElement('div'); captureRow.className='buttons-row';
-      captureRow.appendChild(mkBtn('coral small full', `Use Smoker to Capture`, ()=>{
-        state.inventory.smoker -= 1;
-        boss.favorite = false;
-        state.collection.push(boss);
-        state.stats.queensCaptured = (state.stats.queensCaptured||0)+1;
-        saveState(); checkAchievements();
-        captureRow.remove(); captureNote.innerHTML = `<b style="color:#3f9142;">${boss.name} joined your Squad!</b>`;
-        showToast(`${boss.name} captured!`);
-      }));
-      panelEl.appendChild(captureRow);
-    }
+    const ownedCaptureItems = CAPTURE_ITEMS.filter(it=> (state.inventory[it.key]||0)>0);
+    const captureNote = document.createElement('div'); captureNote.className='hint'; captureNote.style.textAlign='center'; captureNote.style.marginTop='8px';
+    captureNote.textContent = `Attempt to capture ${boss.name}?`;
+    panelEl.appendChild(captureNote);
+    const select = document.createElement('select');
+    select.id = 'bossCaptureItemSelect';
+    select.style.cssText = 'margin-top:4px;width:85%;font-size:11px;border-radius:6px;border:1px solid #ccc;padding:5px;display:block;margin-left:auto;margin-right:auto;';
+    select.innerHTML = `<option value="">No item</option>${ownedCaptureItems.map(it=>`<option value="${it.key}">${it.name} (Own ${state.inventory[it.key]})</option>`).join('')}`;
+    panelEl.appendChild(select);
+    const captureRow = document.createElement('div'); captureRow.className='buttons-row';
+    captureRow.appendChild(mkBtn('coral small full', 'Attempt Capture', ()=>{
+      const key = select.value;
+      if(key!=='smoker'){
+        showToast("You can't use that item on a Queen. She's too powerful.");
+        return;
+      }
+      state.inventory.smoker -= 1;
+      boss.favorite = false;
+      state.collection.push(boss);
+      state.stats.queensCaptured = (state.stats.queensCaptured||0)+1;
+      saveState(); checkAchievements();
+      captureRow.remove(); select.remove(); captureNote.innerHTML = `<b style="color:#3f9142;">${boss.name} joined your Squad!</b>`;
+      showToast(`${boss.name} captured!`);
+    }));
+    panelEl.appendChild(captureRow);
   } else {
     state.stats.bossDefeats = (state.stats.bossDefeats||0)+1;
     const restUntil = Date.now()+25*60000;
@@ -1845,10 +1862,12 @@ function queenSVG(m, size){
     <path d="M67 43 C63 40 56 40 53 44 C56 47 63 47 67 43 Z" fill="#EAE3D3" stroke="#1A1F1C" stroke-width="1.3"/>
     <circle cx="58" cy="43" r="2.6" fill="#1A1F1C"/>
     <path d="M41 68 L45 62 L49 68 L53 62 L57 68" fill="none" stroke="#1A1F1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M35 4 L38 -12 L45 -2 L50 -16 L55 -2 L62 -12 L65 4 Z" fill="url(#queenCrownGrad-${m.barcode})" stroke="#8a6d1a" stroke-width="2"/>
-    <circle cx="50" cy="-4" r="2.5" fill="#a13a24"/>
-    <circle cx="42" cy="2" r="2" fill="#4E8FD1"/>
-    <circle cx="58" cy="2" r="2" fill="#4E8FD1"/>
+    <g id="queenCrownHit-${m.barcode}">
+      <path d="M35 4 L38 -12 L45 -2 L50 -16 L55 -2 L62 -12 L65 4 Z" fill="url(#queenCrownGrad-${m.barcode})" stroke="#8a6d1a" stroke-width="2"/>
+      <circle cx="50" cy="-4" r="2.5" fill="#a13a24"/>
+      <circle cx="42" cy="2" r="2" fill="#4E8FD1"/>
+      <circle cx="58" cy="2" r="2" fill="#4E8FD1"/>
+    </g>
     <defs><linearGradient id="queenCrownGrad-${m.barcode}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFE27A"/><stop offset="100%" stop-color="#B8791C"/></linearGradient></defs>
     ${m.weapon ? weaponSVG(m.weapon) : ''}
     ${m.shield ? shieldSVG(m.shield) : ''}
@@ -2007,7 +2026,7 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'hiveLegendarySlayer', name:'Against the Odds', desc:'Defeat Legendary-tier Hive opponents', guide:'Push deep enough into The Hive and the opponents you face start skewing toward Legendary rarity - defeat some of them.', getValue: ()=> state.stats.hiveLegendaryWins||0, tiers:[1,5,20,75,200]},
   {key:'hiveFullyStocked', name:'Fully Stocked', desc:'Try every Hive checkpoint bonus', guide:'Every time you reach a checkpoint in The Hive, you can pick one free bonus. Try all 5 different kinds across your runs.', getValue: ()=> (state.hiveShopKeysUsed||[]).length, tiers:[1,2,3,4,5]},
   {key:'hiveRegular', name:'Checkpoint Regular', desc:'Reach Hive checkpoints', guide:'Every 25 kills in The Hive triggers a checkpoint - reach enough of them, across as many runs as it takes.', getValue: ()=> state.stats.hiveCheckpointsReached||0, tiers:[1,5,20,50,150]},
-  {key:'royalCourt', name:'Royal Court', desc:'Capture wild Queens', guide:'Buy a Smoker from the Specialist store, then defeat a wild Queen while holding one for a guaranteed capture. The top tier means enough Queens for a full squad of 5.', getValue: ()=> state.stats.queensCaptured||0, tiers:[1,2,3,4,5]},
+  {key:'royalCourt', name:'Royal Court', desc:'Capture wild Queens', guide:'Buy a Smoker from the Scanner section of the Store, then defeat a wild Queen while holding one and select it when the capture option appears. The top tier means enough Queens for a full squad of 5.', getValue: ()=> state.stats.queensCaptured||0, tiers:[1,2,3,4,5]},
   {key:'globalAce', name:'Global Ace', desc:"Rank on the Global leaderboard", guide:"Open Friends > Global to see how you stack up against every hunter, not just your friends. Earning more Hunter XP climbs you higher - the top 20 make the board at all.", getValue: ()=> state.stats.bestGlobalRank ? Math.max(0, 21-state.stats.bestGlobalRank) : 0, tiers:[1,11,16,18,20]},
 ];
 function achievementsUnlockedCount(){
@@ -2100,7 +2119,7 @@ function renderQuests(container){
     const done = q.completed || q.skipped;
     const pct = Math.max(0, Math.min(100, Math.round(100*progress/q.target)));
     const skipUsed = state.dailyQuests.skipsUsed[q.difficulty];
-    return `<div class="log-row" style="flex-direction:column; align-items:stretch; gap:2px;${done?'opacity:.5;filter:grayscale(70%);':''}">
+    return `<div class="log-row" style="flex-direction:column; align-items:stretch; gap:2px;${done?'opacity:.5;':''}">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <div class="log-name" style="font-size:12.5px;">${t.label(q.target)}</div>
         <div class="log-status" style="background:${done?'#8a8a8a':diff.color};">${diff.label}</div>
@@ -2494,6 +2513,7 @@ const CAPTURE_ITEMS = [
   {key:'luckyCharmField', name:'Lucky Charm', desc:'+28% capture chance', cost:220, bonus:0.28},
   {key:'goldenLure', name:'Golden Lure', desc:'+40% capture chance', cost:420, bonus:0.40},
   {key:'huntersSnare', name:"Hunter's Snare", desc:'Guarantees a successful capture', cost:7500, bonus:0, guaranteed:true},
+  {key:'smoker', name:'Smoker', desc:'Defeat a wild Queen while holding one to capture her, guaranteed - no chance involved', cost:100000, bonus:0, guaranteed:true, queenOnly:true},
 ];
 const ARMOR_ITEMS = [
   {key:'bronzeArmor', name:'Bronze Armour', desc:'Helmet+torso: +5 Guard, occasional counter-damage', tier:'common', cost:100, bonus:5, recoil:0.05, reqLevel:1},
@@ -2521,7 +2541,6 @@ const SHIELD_ITEMS = [
 ];
 const SPECIALIST_EXTRA = [
   {key:'genesisShard', name:'Genesis Shard', desc:'Guarantees your very next catch is Legendary', cost:250000000},
-  {key:'smoker', name:'Smoker', desc:'Defeat a wild Queen while holding one to capture her, guaranteed - no chance involved', cost:100000},
 ];
 const COSTUME_ITEMS = [
   {key:'championBelt', name:'Champion Belt', desc:'Purely cosmetic - visible on your Skrambeast', cost:150},
@@ -2602,6 +2621,10 @@ function restRemainingLabel(m){
   return Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0');
 }
 function favoritedSquad(){ return state.collection.filter(m=>m.favorite); }
+function playerHasAnyCrown(){
+  if((state.inventory.queensCrown||0) > 0) return true;
+  return state.collection.some(m=> m.costume==='queensCrown');
+}
 function queenSquadMultiplier(favs){
   const queenCount = (favs||favoritedSquad()).filter(m=>m.isBoss).length;
   return 1 + queenCount*0.15;
@@ -3401,7 +3424,7 @@ function openCaptureScreen(){
   stopNoise();
   dynamicZone.innerHTML='';
   const m = encounter.monster;
-  const items = CAPTURE_ITEMS.filter(it=> (state.inventory[it.key]||0)>0);
+  const items = CAPTURE_ITEMS.filter(it=> (state.inventory[it.key]||0)>0 && !it.queenOnly);
   screenEl.innerHTML = `
     <div class="mini-svg float" style="width:80px;height:80px;border-radius:50%;${auraStyle(m)}">${monsterSVG(m,80)}</div>
     <div class="pixel md">${m.name}</div>
@@ -3647,6 +3670,7 @@ function renderHive(container){
   const rosterEl = document.getElementById('hiveRoster');
   let selectedId = null;
   rosterEl.innerHTML = favs.map(m=> `<div class="arena-roster-icon${isTired(m)?' tired':''}" data-fid="${m.id}" style="flex:0 0 auto;width:60px;"><div style="width:28px;height:28px;">${monsterSVG(m,28)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
+  void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
   rosterEl.querySelectorAll('[data-fid]').forEach(el=>{
     if(el.classList.contains('tired')) return;
     el.addEventListener('click', ()=>{
@@ -3975,6 +3999,7 @@ function showWildFighterPicker(pool, isFavoritesPool, isCaptureFlow){
     chip.addEventListener('click', ()=>{ overlay.remove(); proceedBattleEncounter(m, isCaptureFlow); });
     chipsEl.appendChild(chip);
   });
+  void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
   overlay.querySelector('#wildPickCancel').addEventListener('click', ()=> overlay.remove());
   overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
 }
@@ -4116,7 +4141,7 @@ function renderCollection(panel){
     panel.innerHTML = `<div class="empty-state">SQUAD EMPTY<br><span style="font-weight:400;font-size:12px;">Scan something to catch your first Skrambeast.</span></div>`;
     return;
   }
-  const filtered = squadFilter==='all' ? state.collection : state.collection.filter(m=>m.rarity===squadFilter);
+  const filtered = squadFilter==='all' ? state.collection : squadFilter==='queen' ? state.collection.filter(m=>m.isBoss) : state.collection.filter(m=>m.rarity===squadFilter && !m.isBoss);
   const sorted = [...filtered].sort((a,b)=>{
     const favDiff = (b.favorite?1:0)-(a.favorite?1:0); if(favDiff) return favDiff;
     if(a.favorite && b.favorite) return (a.favoritedAt||0)-(b.favoritedAt||0);
@@ -4126,7 +4151,7 @@ function renderCollection(panel){
   const totalPages = Math.max(1, Math.ceil(sorted.length/SQUAD_PAGE_SIZE));
   squadPage = Math.min(squadPage, totalPages-1);
   const pageItems = sorted.slice(squadPage*SQUAD_PAGE_SIZE, squadPage*SQUAD_PAGE_SIZE+SQUAD_PAGE_SIZE);
-  const filterBtns = RARITY_ORDER.map(r=> `<button class="btn tiny ${squadFilter===r?'yolk':'cream'}" style="padding:3px 5px;font-size:9px;" data-sfilter="${r}">${SQUAD_FILTER_LABEL[r]}</button>`).join('');
+  const filterBtns = RARITY_ORDER.map(r=> `<button class="btn tiny ${squadFilter===r?'yolk':'cream'}" style="padding:3px 5px;font-size:9px;" data-sfilter="${r}">${SQUAD_FILTER_LABEL[r]}</button>`).join('') + `<button class="btn tiny ${squadFilter==='queen'?'yolk':'cream'}" style="padding:3px 5px;font-size:9px;" data-sfilter="queen">Queen</button>`;
   const cap = squadCapacity();
   const buyRow = squadFull() ? `<div class="buttons-row"><button class="btn yolk small full" id="buySquadPageBtn">Buy Squad Space - ${formatCoins(squadSpaceCost(squadPagesOwned()+1))} coins</button></div>` : '';
   panel.innerHTML = `
@@ -4143,7 +4168,7 @@ function renderCollection(panel){
 // Rebuilds only the tile grid (not the header/filters/page-bar) - used after a favorite
 // toggle so the shimmer animation on holo tiles doesn't restart across the whole page.
 function renderSquadGrid(panel){
-  const filtered = squadFilter==='all' ? state.collection : state.collection.filter(m=>m.rarity===squadFilter);
+  const filtered = squadFilter==='all' ? state.collection : squadFilter==='queen' ? state.collection.filter(m=>m.isBoss) : state.collection.filter(m=>m.rarity===squadFilter && !m.isBoss);
   const sorted = [...filtered].sort((a,b)=>{
     const favDiff = (b.favorite?1:0)-(a.favorite?1:0); if(favDiff) return favDiff;
     if(a.favorite && b.favorite) return (a.favoritedAt||0)-(b.favoritedAt||0);
@@ -4173,6 +4198,7 @@ function renderSquadGrid(panel){
     tile.addEventListener('click', ()=> openDetailModal(m, true));
     grid.appendChild(tile);
   });
+  void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
   attachSwipe(grid, ()=>{ if(squadPage<totalPages-1){ squadPage++; renderCollection(panel);} }, ()=>{ if(squadPage>0){ squadPage--; renderCollection(panel);} });
 }
 function releaseMonster(id){
@@ -4776,6 +4802,7 @@ function showFriendSnapshot(friendPlayerId, pr){
   squadRoster.innerHTML = squad.length
     ? squad.map(m=> { const rs = RARITY_STYLE[m.rarity]; const badge = isMaxed(m) ? (m.isBoss ? `<div class="tile-trophy" style="background:#D4A017;">${iconCrown()}</div>` : `<div class="tile-trophy">${iconTrophy(12,rs.color)}</div>`) : ''; return `<div class="arena-roster-icon" style="position:relative;" data-squad-idx="${squad.indexOf(m)}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span>${badge}</div>`; }).join('')
     : `<div class="hint">No favourited squad yet.</div>`;
+  void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
   squadRoster.querySelectorAll('[data-squad-idx]').forEach(el=>{
     const m = squad[Number(el.dataset.squadIdx)];
     if(m) el.addEventListener('click', ()=> openDetailModal(m, false, false));
@@ -4901,7 +4928,7 @@ const GAME_SECRETS = [
   "One Specialist charm doesn't pick a favourite stat - it lifts all of them at once, for hunters who've done well for themselves.",
   "A monster that beats you gets away for good - no immediate rematch, so bring your best.",
   "Her crown doesn't just sit there for decoration. During the encounter itself, before any fighting starts, try tapping it - patience and a bit of rhythm are rewarded.",
-  "Somewhere in the Specialist shelf sits a tool that turns a fair fight into something permanent. The trick is holding it before she falls, not after.",
+  "Somewhere in the Scanner section of the Store sits a tool that turns a fair fight into something permanent. The trick is having it in hand, then choosing it the moment she falls.",
   "A captured Queen doesn't get quietly weaker to fit in. Whatever made her worth fighting in the first place, she brings every bit of it home with her.",
   "The more Queens stand at your side, the less anything else stands a chance - and the less mercy the next Queen you meet is likely to show you either."
 
@@ -5030,6 +5057,7 @@ function renderEncyclopedia(container){
     }
     grid.appendChild(tile);
   }
+  void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
   document.getElementById('encPageBar').innerHTML = `<button class="btn tiny cream" id="encPrev" ${encyclopediaPage===0?'disabled':''}>${iconChevron('left')}</button><span class="pixel sm">${encyclopediaPage+1}/${totalPages}</span><button class="btn tiny cream" id="encNext" ${encyclopediaPage>=totalPages-1?'disabled':''}>${iconChevron('right')}</button>`;
   document.getElementById('encPrev').addEventListener('click', ()=>{ if(encyclopediaPage===0) return; encyclopediaPage=Math.max(0,encyclopediaPage-1); renderEncyclopedia(container); });
   document.getElementById('encNext').addEventListener('click', ()=>{ if(encyclopediaPage>=totalPages-1) return; encyclopediaPage=Math.min(totalPages-1,encyclopediaPage+1); renderEncyclopedia(container); });
@@ -5605,6 +5633,7 @@ function renderTeamPicker(container, squad, selectedArr, onChange){
     });
     chipsEl.appendChild(chip);
   });
+  void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
 }
 /* =========================================================
    ARENA (solo training against random opponents, drawn from
@@ -5666,6 +5695,7 @@ function renderBossTrainingSelect(container, bosses){
     }
     grid.appendChild(tile);
   }
+  void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
 }
 // Reconstructs a fully combat-ready boss object from a discovered almanac entry (weapon/armor are
 // constant across every Queen per generateBoss, so it's safe to set them directly rather than storing
@@ -5693,7 +5723,7 @@ function renderBossTrainingPrep(container, trainingBoss){
       <div class="pixel sm">Lv.${trainingBoss.level}</div>
       <div class="stat-row" style="justify-content:center;margin-top:4px;">${statLine(trainingBoss.stats)}</div>
     </div>
-    ${ready ? `<div style="display:flex;justify-content:flex-end;margin-bottom:4px;"><div style="background:${chanceColor};color:#fff;font-family:'Press Start 2P',monospace;font-size:8px;padding:4px 6px;border-radius:6px;white-space:nowrap;">${chance}% Chance of Win</div></div>` : ''}
+    ${ready ? `<div style="font-size:9px;color:${chanceColor};opacity:.9;font-family:'Rubik',sans-serif;text-align:center;font-weight:700;">${chance}% Chance of Win</div>` : ''}
     ${ready
       ? `<div class="hint">Same XP and coins as normal Arena training - no loot drops here, this is practice.</div><div class="buttons-row"><button class="btn coral small full" id="bossTrainBeginBtn">Begin Training Battle</button></div>`
       : `<div class="hint" style="color:#a13a24;">You need 5 favourites in your Squad to train against a Queen. (${favs.length}/5)</div><div class="buttons-row"><button class="btn cream small full" id="bossTrainGoSquad">Go to Squad</button></div>`}`;
@@ -5731,6 +5761,7 @@ function startNearbyDuelBattle(myTeam, opponentTeam, container, onFinish){
   function renderRosters(){
     rosterEl.innerHTML = myTeam.map((m,i)=> `<div class="arena-roster-icon${i===myIdx?' selected':''}" style="${myFainted[i]?'opacity:.3;':''}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
     oppRosterEl.innerHTML = opponentTeam.map((m,i)=> `<div class="arena-roster-icon${i===oppIdx?' selected':''}" style="${oppFainted[i]?'opacity:.3;':''}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
+    void document.body.offsetHeight; // forces a clean repaint boundary after building two grids of hue-rotated monster tiles (player and opponent rosters) - see the earlier diagnosed GPU-compositor glitch
   }
   function updateBars(){ const pct=Math.max(0,oppHp)/oppFighterHp(opponentTeam[oppIdx]); oppBar.style.width=(pct*100)+'%'; oppBar.style.background=hpBarColor(pct); }
   function addLog(text){ logEl.innerHTML += text+'<br>'; logEl.scrollTop=logEl.scrollHeight; }
@@ -5855,6 +5886,7 @@ function startBossTrainingBattle(boss, container){
 
   function renderRoster(){
     rosterEl.innerHTML = team.map((m,i)=> `<div class="arena-roster-icon${i===activeIdx?' selected':''}" style="${fainted[i]?'opacity:.3;':''}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
+    void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
   }
   function updateBars(){ const wPct=Math.max(0,wHp)/maxWHp; bossBar.style.width=(wPct*100)+'%'; bossBar.style.background=hpBarColor(wPct); }
   function addLog(text){ logEl.innerHTML += text+'<br>'; logEl.scrollTop=logEl.scrollHeight; }
@@ -5961,7 +5993,10 @@ function resolveBossTraining(boss, team, won, container){
         note.textContent = 'Rest skipped - your squad is ready!';
         adRow.remove();
         const rosterEl = document.getElementById('btRoster');
-        if(rosterEl) rosterEl.innerHTML = team.map(m=> `<div class="arena-roster-icon"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
+        if(rosterEl){
+          rosterEl.innerHTML = team.map(m=> `<div class="arena-roster-icon"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
+          void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
+        }
         const battleAgainBtnNow = document.getElementById('battleAgainBtn');
         if(battleAgainBtnNow) battleAgainBtnNow.disabled = false;
         showToast("Rest skipped - your squad is ready!");
@@ -6061,6 +6096,7 @@ function renderArenaRoster(container, outerContainer){
       <span class="pixel sm">Lv.${m.level}</span>
     </div>`;
   }).join('');
+  void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
   let lastTapId = null, lastTapTime = 0;
   container.querySelectorAll('[data-fighter-id]').forEach(el=>{
     const m = favs.find(x=>x.id===el.dataset.fighterId);
@@ -6240,7 +6276,7 @@ function renderVersus(panel){
     panel.innerHTML = `
       <div id="incomingBattleRequestSlot"></div>
       <div class="section-label">Choose how to play</div>
-      <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#4E8FD1',52)}</div><div class="vs-center"><span id="easterEgg3BtIcon" style="cursor:pointer;display:inline-flex;">${iconBluetooth(30)}</span></div><div class="vs-side">${genericMonsterIcon('#E8542E',52)}</div></div>
+      <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#4E8FD1',52)}</div><div class="vs-center"><span id="easterEgg3BtIcon" class="vs-badge" style="cursor:pointer;">VS</span></div><div class="vs-side">${genericMonsterIcon('#E8542E',52)}</div></div>
       <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcNearby">Player VS Player</button></div>
       <div class="hint" style="text-align:center;margin-top:4px;">Trade or duel another hunter, by code or instantly.</div>
       <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#8FA998',52)}</div><div class="vs-center"><span class="vs-badge">VS</span></div><div class="vs-side">${genericMonsterIcon('#F77F00',52)}</div></div>
@@ -6308,7 +6344,7 @@ function renderVersus(panel){
       <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#8FA998',52)}</div><div class="vs-center"><span class="vs-badge">VS</span></div><div class="vs-side">${genericMonsterIcon('#F77F00',52)}</div></div>
       <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcNormalTraining">Normal Training</button></div>
       <div class="hint" style="text-align:center;margin-top:4px;">A single practice fight against a generated opponent.</div>
-      <div class="vs-illustration"><div class="vs-side"><div class="vs-squad-cluster" style="opacity:.9;"><div class="vs-squad-row">${miniMonsterIcon('#F2C13D',13)}${miniMonsterIcon('#E8542E',13)}${miniMonsterIcon('#9B5DE5',13)}</div><div class="vs-squad-row">${miniMonsterIcon('#4E8FD1',13)}${miniMonsterIcon('#5CA85C',13)}${miniMonsterIcon('#D4A017',13)}${miniMonsterIcon('#8FA998',13)}</div></div></div><div class="vs-center"><span class="vs-badge" style="color:#D4A017;">∞</span></div><div class="vs-side">${genericMonsterIcon('#a13a24',58)}</div></div>
+      <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#a13a24',58)}</div><div class="vs-center"><span class="vs-badge" style="color:#D4A017;">∞</span></div><div class="vs-side"><div class="vs-squad-cluster" style="opacity:.9;"><div class="vs-squad-row">${miniMonsterIcon('#F2C13D',13)}${miniMonsterIcon('#E8542E',13)}${miniMonsterIcon('#9B5DE5',13)}</div><div class="vs-squad-row">${miniMonsterIcon('#4E8FD1',13)}${miniMonsterIcon('#5CA85C',13)}${miniMonsterIcon('#D4A017',13)}${miniMonsterIcon('#8FA998',13)}</div><div class="vs-squad-row">${miniMonsterIcon('#E8542E',13)}${miniMonsterIcon('#9B5DE5',13)}${miniMonsterIcon('#4E8FD1',13)}</div></div></div></div>
       <div class="buttons-row"><button class="btn coral small full vs-menu-btn" id="vcHive">The Hive</button></div>
       <div class="hint" style="text-align:center;margin-top:4px;">One Skrambeast, no healing, endless waves.</div>`;
     document.getElementById('vcBack').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(panel); });
