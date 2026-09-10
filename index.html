@@ -205,7 +205,7 @@
   .toggle-switch.on{background:var(--coral);}
   .toggle-switch::after{content:''; position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); transition:left .15s ease;}
   .toggle-switch.on::after{left:22px;}
-  .settings-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid rgba(0,0,0,.08);}
+  .settings-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid rgba(0,0,0,.08);}
   .settings-label{font-family:'Baloo 2',sans-serif; font-weight:700; font-size:13px;}
   .settings-sub{font-size:10px; color:#777; margin-top:1px;}
 
@@ -340,6 +340,15 @@
   .battle-fighter{width:80px; height:80px; position:relative;}
   .battle-fighter.right{transform:scaleX(-1);}
   .tap-center{position:relative; width:72px; height:72px; flex:none; display:flex; align-items:center; justify-content:center; cursor:pointer; border-radius:50%; background:rgba(232,84,46,.14); border:2px dashed rgba(232,84,46,.45); user-select:none; -webkit-tap-highlight-color:transparent;}
+  .special-bar{display:flex; flex-direction:row; gap:2px; width:110px; height:9px; margin:2px auto 0; background:rgba(0,0,0,.15); border-radius:4px; padding:2px; box-sizing:border-box;}
+  .special-bar-seg{flex:1; border-radius:2px; background:rgba(255,255,255,.25); transition:background .2s ease;}
+  .special-bar-seg.filled{background:#4E8FD1; box-shadow:0 0 4px rgba(78,143,209,.8);}
+  .special-tap-circle{position:absolute; inset:0; margin:auto; width:56px; height:56px; border-radius:50%; background:rgba(78,143,209,.3); border:2px dashed #4E8FD1; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:5; -webkit-tap-highlight-color:transparent;}
+  .special-tap-circle.flashing{animation:specialFlash .35s steps(1) infinite;}
+  @keyframes specialFlash{0%,49%{opacity:1;}50%,100%{opacity:0.15;}}
+  .special-explosion{position:absolute; inset:0; margin:auto; width:90px; height:90px; pointer-events:none; z-index:6;}
+  @keyframes specialBoom{0%{transform:scale(.2); opacity:1;}100%{transform:scale(1.6); opacity:0;}}
+  .special-explosion span{position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle, rgba(255,220,120,.95) 0%, rgba(232,84,46,.85) 45%, rgba(232,84,46,0) 75%); animation:specialBoom .5s ease-out forwards;}
   .tap-center:active{background:rgba(232,84,46,.3);}
   .tap-countdown{font-family:'Baloo 2',sans-serif; font-weight:800; font-size:44px; color:var(--coral); text-shadow:2px 2px 0 #1A1F1C, -1px -1px 0 #1A1F1C; pointer-events:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); white-space:nowrap;}
   .cd-pop{animation:cdPop .75s ease-out;}
@@ -494,6 +503,8 @@ function iconBag(){ return `<svg viewBox="0 0 24 24" width="15" height="15"><pat
 function iconHeart(){ return `<svg viewBox="0 0 24 24" width="13" height="13"><path d="M12 21s-7-4.5-9.5-9C1 8.5 3 5 6.5 5 9 5 11 7 12 8.5 13 7 15 5 17.5 5 21 5 23 8.5 21.5 12 19 16.5 12 21 12 21z" fill="#E8542E" stroke="#1A1F1C" stroke-width="1.1"/></svg>`; }
 function iconSword(){ return `<svg viewBox="0 0 24 24" width="13" height="13"><path d="M4 20l8-8M13 3l8 8-3 3-8-8 3-3z" fill="none" stroke="#1A1F1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
 function iconShield(){ return `<svg viewBox="0 0 24 24" width="13" height="13"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z" fill="#4E8FD1" stroke="#1A1F1C" stroke-width="1.2"/></svg>`; }
+function iconClover(){ return `<svg viewBox="0 0 24 24" width="13" height="13"><circle cx="9" cy="9" r="4" fill="#5CA85C" stroke="#1A1F1C" stroke-width="1"/><circle cx="15" cy="9" r="4" fill="#5CA85C" stroke="#1A1F1C" stroke-width="1"/><circle cx="9" cy="15" r="4" fill="#5CA85C" stroke="#1A1F1C" stroke-width="1"/><circle cx="15" cy="15" r="4" fill="#5CA85C" stroke="#1A1F1C" stroke-width="1"/><line x1="12" y1="15" x2="12" y2="22" stroke="#3f6b4a" stroke-width="1.5"/></svg>`; }
+function iconReflect(){ return `<svg viewBox="0 0 24 24" width="13" height="13"><path d="M4 14a8 8 0 0114-5" fill="none" stroke="#9B5DE5" stroke-width="2" stroke-linecap="round"/><path d="M18 5v5h-5" fill="none" stroke="#9B5DE5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
 function iconArmor(){ return `<svg viewBox="0 0 24 24" width="13" height="13"><path d="M7 4l5-2 5 2v3l3 2-2 3v8H6v-8l-2-3 3-2z" fill="#8a6d3b" stroke="#1A1F1C" stroke-width="1.2"/></svg>`; }
 function iconWind(){ return `<svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 8h11a3 3 0 100-3M3 16h15a3 3 0 110 3M3 12h8" fill="none" stroke="#1A1F1C" stroke-width="1.8" stroke-linecap="round"/></svg>`; }
 function iconSparkle(color){ return `<svg viewBox="0 0 24 24" width="12" height="12"><path d="M12 2l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" fill="${color||'#D4A017'}" stroke="#1A1F1C" stroke-width="1"/></svg>`; }
@@ -538,6 +549,11 @@ function achievementIcon(key){
     case 'typeShadow': return typeIcon('shadow', 20);
     case 'typeCrystal': return typeIcon('crystal', 20);
     case 'timeInvested': return `<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="1.8"/><line x1="12" y1="12" x2="12" y2="6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><line x1="12" y1="12" x2="16" y2="14" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+    case 'queenConfused': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 10l2-6 3 4 3-5 3 5 3-4 2 6z" fill="#fff"/><circle cx="18" cy="6" r="1.4" fill="#fff"/><circle cx="21" cy="9" r="1" fill="#fff"/><circle cx="19" cy="12" r="0.8" fill="#fff"/></svg>`;
+    case 'hiveConqueror': case 'swarmSlayer': case 'hiveRegular':
+      return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z" fill="none" stroke="#fff" stroke-width="1.6"/></svg>`;
+    case 'hiveLegendarySlayer': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l2.4 6.6L21 10l-5.5 4.2L17 21l-5-3.6L7 21l1.5-6.8L3 10l6.6-1.4z" fill="#fff"/></svg>`;
+    case 'hiveFullyStocked': return `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="4" width="7" height="7" fill="#fff"/><rect x="13" y="4" width="7" height="7" fill="#fff" opacity=".7"/><rect x="4" y="13" width="7" height="7" fill="#fff" opacity=".7"/><rect x="13" y="13" width="7" height="7" fill="#fff" opacity=".4"/></svg>`;
     default: return '';
   }
 }
@@ -571,6 +587,11 @@ function sfxFireworks(){
   [1568,1976,2349,2637].forEach((f,i)=> tone(f,0.16,'triangle',0.1,0.36+i*0.07));
 }
 function sfxPotionEquip(){ tone(520,0.08,'sawtooth',0.09,0); tone(420,0.08,'sawtooth',0.08,0.07); tone(700,0.12,'triangle',0.1,0.15); }
+function sfxLevelUp(){ [660,880,1100].forEach((f,i)=> tone(f,0.1,'triangle',0.11,i*0.06)); }
+function sfxRankUp(){ [523,659,784,1047,1319].forEach((f,i)=> tone(f,0.16,'triangle',0.13,i*0.08)); tone(1568,0.3,'sine',0.1,0.42); }
+function sfxAchievement(){ tone(784,0.09,'square',0.09,0); tone(988,0.09,'square',0.09,0.07); tone(1319,0.18,'triangle',0.11,0.14); }
+function sfxEquip(){ tone(340,0.05,'square',0.09,0); tone(500,0.06,'square',0.08,0.05); }
+function sfxCritical(){ tone(200,0.05,'sawtooth',0.15,0); tone(900,0.06,'square',0.1,0.02); }
 function sfxShoo(){
   const ctx = ensureAudio(); if(!ctx) return;
   const osc = ctx.createOscillator(), gain = ctx.createGain();
@@ -967,18 +988,16 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '1.98';
+const FIRMWARE_VERSION = '2.5';
 const FIRMWARE_CHANGELOG = [
-  'Battle win messages are bigger and more eye-catching',
-  'Squad tab now shows a Resting badge on tired Skrambeasts',
-  'Egg ad-reductions capped at 5 per egg',
-  'Boss Training now shows the Queen\'s full stats',
-  'Rank ribbons rounded and given a bit more depth',
-  'Achievement pop-ups wait a beat before appearing mid-battle, so you don\'t miss them',
-  'Arena roster tiles now show each Skrambeast\'s type',
-  'New: Total Time Played stat, plus discovery stats and achievements for all six types',
-  'A few new sounds - egg tapping, hatching, and using a potion',
-  '4 new Game Secrets to find',
+  'Fixed a real exploit: browsing Hive checkpoint items was inflating your stats every single click - now only counts once per checkpoint, as intended',
+  'Fixed: Hive run summary showed blank totals (white text on white background)',
+  'Removed the Hive\'s top Back button - it silently discarded runs with no warning. Exit Hive is now the only way out, with confirmation',
+  'Hive checkpoint: added icons and info pop-ups to every bonus, both buttons now Continue Battle / Exit Hive',
+  'New stat: Queens Beaten, separated from Legendary Opponents Beaten',
+  'Hive kill/HP display redesigned - smaller, moved under the title, no more oversized bubble',
+  'Moved the Wave Cleared continue button further from the Special Attack tap zone, with a settling delay to prevent accidental taps',
+  'Shortened the VS/Arena option descriptions and improved their spacing',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1068,6 +1087,7 @@ function grantXP(m, amount){
   m.xp += boosted;
   let leveled = false;
   while(m.level<cap && m.xp>=xpToNext(m.level)){ m.xp -= xpToNext(m.level); m.level++; leveled=true; }
+  if(leveled) sfxLevelUp();
   if(m.level>=cap){ m.level=cap; m.xp=0; if(!m.maxedAt) m.maxedAt=Date.now(); }
   recomputeStats(m);
   return leveled;
@@ -1389,8 +1409,10 @@ function renderBossEncounter(){
     <div class="hp-bar-wrap" style="width:120px;margin:4px auto;"><div class="hp-bar-fill" style="background:#3f9142;width:100%;"></div></div>
     <div class="pixel sm" style="text-align:center;color:#a13a24;text-shadow:1px 1px 0 rgba(255,255,255,.4);">${boss.name}</div>
     <div class="pixel sm" style="text-align:center;color:var(--lcd-ink);text-shadow:1px 1px 0 rgba(255,255,255,.4);">Lv.${boss.level} · Queen</div>`;
+  const canTapCrown = !state.inventory.queensCrown;
   panelEl.innerHTML = `
     <div style="display:flex;justify-content:flex-end;margin-bottom:4px;"><div style="background:${chanceColor};color:#fff;font-family:'Press Start 2P',monospace;font-size:8px;padding:4px 6px;border-radius:6px;white-space:nowrap;">${chance}% Chance of Win</div></div>
+    ${canTapCrown ? `<div class="log-row" id="crownTapRow" style="cursor:pointer;justify-content:center;"><div class="pixel sm" id="crownTapLabel">👑 Try to snatch her crown? (0/10)</div></div>` : ''}
     <div class="hint" style="${ready?'':'color:#a13a24;'}">${ready
       ? "Bring your 5 favourites - this will be a real fight, and you can't back out once it starts. Worth a stop at the Store beforehand to gear up!"
       : `You need 5 favourites in your Squad to challenge a Queen. (${favs.length}/5 ready)`}</div>
@@ -1399,6 +1421,28 @@ function renderBossEncounter(){
       : `<div class="buttons-row"><button class="btn cream small full" id="bossGoSquad">Go to Squad</button></div>`}`;
   if(ready) document.getElementById('bossBeginBtn').addEventListener('click', startBossBattle);
   else document.getElementById('bossGoSquad').addEventListener('click', ()=> switchTab('collection'));
+  if(canTapCrown){
+    let taps = 0;
+    const tapRow = document.getElementById('crownTapRow');
+    const tapLabel = document.getElementById('crownTapLabel');
+    tapRow.addEventListener('click', ()=>{
+      taps++;
+      sfxEggTap();
+      if(taps>=10){
+        state.inventory.queensCrown = (state.inventory.queensCrown||0)+1;
+        state.stats.crownsLifetime = (state.stats.crownsLifetime||0)+1;
+        saveState(); checkAchievements();
+        showToast("You snatched her crown!");
+        sfxCaptureSuccess();
+        tapRow.remove();
+        return;
+      }
+      tapLabel.textContent = `👑 Try to snatch her crown? (${taps}/10)`;
+      if(taps%3===0){
+        tapLabel.classList.remove('egg-wiggle'); void tapLabel.offsetWidth; tapLabel.classList.add('egg-wiggle');
+      }
+    });
+  }
 }
 function startBossBattle(){
   const boss = state.activeBoss;
@@ -1415,19 +1459,25 @@ function startBossBattle(){
   let resolved=false, lastTapAt=0, opponentTimer=null, lastHiddenAt=0, autoFighterTimer=null;
 
   screenEl.innerHTML = `
-    <div class="float" style="margin:4px auto;display:flex;justify-content:center;">${monsterSVG(boss,88)}</div>
+    <div class="float" id="bossFighterWrap" style="margin:4px auto;display:flex;justify-content:center;position:relative;">${monsterSVG(boss,88)}</div>
     <div class="hp-bar-wrap" style="width:140px;margin:2px auto;"><div class="hp-bar-fill" id="bossHpBar"></div></div>
     <div class="pixel sm" style="text-align:center;color:#a13a24;text-shadow:1px 1px 0 rgba(255,255,255,.4);">${boss.name}</div>
     <div class="pixel sm" style="text-align:center;color:var(--lcd-ink);text-shadow:1px 1px 0 rgba(255,255,255,.4);">Lv.${boss.level} · Queen</div>`;
   panelEl.innerHTML = `
     <div class="hp-bar-wrap" style="width:130px;margin:0 auto 4px;"><div class="hp-bar-fill" id="teamHpBar"></div></div>
     <div class="arena-roster" id="bossRoster"></div>
-    <div class="tap-center" id="bossTapZone" style="margin:6px auto;"><div class="tap-countdown" id="bossCountdown"></div></div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:6px auto;"><div class="tap-center" id="bossTapZone"><div class="tap-countdown" id="bossCountdown"></div></div>${specialBarHTML('bossSpecial')}</div>
     <div class="battle-log-label">Battle Log${isMaxHitActive()?' <span style="color:#E8542E;">- MAX HITS ACTIVE</span>':''}</div>
     <div class="battle-log" id="bossBattleLog"></div>`;
   const bossBar=document.getElementById('bossHpBar'), teamBar=document.getElementById('teamHpBar');
   const logEl=document.getElementById('bossBattleLog'), countdownEl=document.getElementById('bossCountdown'), tapZone=document.getElementById('bossTapZone');
   const rosterEl=document.getElementById('bossRoster');
+  const specialCtrl = createSpecialAttackController('bossSpecial', document.getElementById('bossFighterWrap'), ()=>{
+    const specialDmg = effectiveStatsWithBuff(team[activeIdx]).power+3;
+    wHp -= specialDmg; addLog(`${team[activeIdx].name} unleashes a special attack for ${specialDmg}!`); sfxCritical();
+    updateBars();
+    if(wHp<=0) finish(true);
+  });
 
   function renderRoster(){
     rosterEl.innerHTML = team.map((m,i)=> `<div class="arena-roster-icon${i===activeIdx?' selected':''}" style="${fainted[i]?'opacity:.3;':''}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
@@ -1462,6 +1512,15 @@ function startBossBattle(){
     const fighter=team[activeIdx], fs=effectiveStats(fighter);
     const armor = fighter.armor? ARMOR_ITEMS.find(a=>a.key===fighter.armor):null;
     const dmg = Math.max(1, Math.round(boss.stats.power - fs.guard*0.35 + (Math.random()*8-4)));
+    if(fighter.costume==='queensCrown' && Math.random()<0.2){
+      wHp -= dmg;
+      addLog(`${boss.name} is confused by her own Crown! The attack bounces back for ${dmg}!`);
+      state.stats.queenConfusedCount = (state.stats.queenConfusedCount||0)+1;
+      sfxCritical();
+      updateBars();
+      if(wHp<=0){ finish(true); return; }
+      return; // the hit was reflected - the fighter takes nothing this turn
+    }
     fHp -= dmg; sfxHit();
     addLog(`${boss.name} hits ${fighter.name} for ${dmg}.`);
     if(armor && Math.random()<armor.recoil){ const counter=Math.max(1,Math.round(dmg*0.4)); wHp-=counter; addLog(`${fighter.name}'s armour counters for ${counter}!`); }
@@ -1478,6 +1537,7 @@ function startBossBattle(){
     dmg = Math.round(dmg*typeMult);
     const burnDmg = weaponBurnDamage(team[activeIdx], wHp);
     wHp -= (dmg+burnDmg); sfxHit();
+    specialCtrl.registerHit();
     addLog(`${team[activeIdx].name} hits ${boss.name} for ${dmg}.${typeMult>1?' Super effective!':typeMult<1?' Not very effective.':''}${burnDmg>0?` Burns for ${burnDmg} more!`:''}`);
     tapZone.classList.remove('tap-pulse'); void tapZone.offsetWidth; tapZone.classList.add('tap-pulse');
     updateBars();
@@ -1530,7 +1590,7 @@ function resolveBossBattle(boss, team, won){
     state.inventory[loot.key] = (state.inventory[loot.key]||0)+1;
     const CROWN_DROP_CHANCE = 2.5/20; // "2-3 crowns per 20 kills"
     const crownDropped = Math.random() < CROWN_DROP_CHANCE;
-    if(crownDropped) state.inventory['queensCrown'] = (state.inventory['queensCrown']||0)+1;
+    if(crownDropped){ state.inventory['queensCrown'] = (state.inventory['queensCrown']||0)+1; state.stats.crownsLifetime = (state.stats.crownsLifetime||0)+1; }
     logAlmanacBoss(boss, 'kept');
     state.activeBoss = null;
     saveState();
@@ -1911,7 +1971,8 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'questMaster', name:'Quest Master', desc:'Complete Daily Quests', guide:'Complete your Daily Quests - three appear each day, one of each difficulty.', getValue: ()=> state.stats.questsCompleted||0, tiers:[5,25,75,150,300]},
   {key:'secondChance', name:'Second Chance', desc:'Entice a fled Skrambeast back', guide:'Entice a Skrambeast that previously fled back for another try, if it gives you the chance to reappear later.', getValue: ()=> state.stats.secondChancesUsed||0, tiers:[1,5,15,40,100]},
   {key:'showingOff', name:"Now You're Just Showing Off", desc:'Equip each unique party hat colour', guide:'Equip a different coloured Party Hat on a different Skrambeast for every colour you own, all at the same time.', getValue: ()=> new Set(state.collection.filter(m=>m.costume && m.costume.startsWith('partyHat')).map(m=>m.costume)).size, tiers:[2,3,4,5,6]},
-  {key:'crownCollector', name:'Crown Collector', desc:"Collect Queen's Crowns", guide:"Defeat wild Queens for a chance at her Crown - a rare trophy drop, roughly 1 in 8 kills. It can't be sold, only traded, so hoard them or deal them away.", getValue: ()=> state.inventory['queensCrown']||0, tiers:[1,2,3,5,10]},
+  {key:'crownCollector', name:'Crown Collector', desc:"Collect Queen's Crowns", guide:"Defeat wild Queens for a chance at her Crown, or claim one guaranteed per Queen by tapping her crown during the encounter. This tracks every crown you've ever obtained, even ones you've since sold or traded away.", getValue: ()=> state.stats.crownsLifetime||0, tiers:[1,2,3,5,10]},
+  {key:'queenConfused', name:'Royally Confused', desc:'Bounce a Queen\'s own attack back at her', guide:"Wear a Queen's Crown into a wild Queen fight - there's a 1-in-5 chance on each of her hits that she gets confused by her own crown and the attack reflects straight back at her instead.", getValue: ()=> state.stats.queenConfusedCount||0, tiers:[1,5,20,75,200]},
   {key:'overflowing', name:'Overflowing', desc:'Redirect surplus battle XP', guide:"Once every favourited Skrambeast is at its level cap, battle XP has nowhere left to go - it redirects into Hunter Rank instead, then into coins once that's maxed too. Keep battling with a fully maxed squad to trigger this.", getValue: ()=> state.stats.xpOverflowCount||0, tiers:[1,10,50,200,1000]},
   {key:'typeEmber', name:'Playing with Fire', desc:'Discover Ember-type Skrambeasts', guide:'Discover Skrambeasts of the Ember type - keep an eye out for the flame icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='ember' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
   {key:'typeAqua', name:'Making Waves', desc:'Discover Aqua-type Skrambeasts', guide:'Discover Skrambeasts of the Aqua type - keep an eye out for the droplet icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='aqua' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
@@ -1920,6 +1981,11 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'typeShadow', name:'Creature of the Dark', desc:'Discover Shadow-type Skrambeasts', guide:'Discover Skrambeasts of the Shadow type - keep an eye out for the crescent icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='shadow' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
   {key:'typeCrystal', name:'Diamond in the Rough', desc:'Discover Crystal-type Skrambeasts', guide:'Discover Skrambeasts of the Crystal type - keep an eye out for the gem icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='crystal' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
   {key:'timeInvested', name:'Time Well Spent', desc:'Total time played', guide:'Just keep playing - this one ticks up on its own the longer the app stays open in front of you.', getValue: ()=> Math.floor((state.stats.totalPlayTimeMs||0)/3600000), tiers:[1,5,20,60,150]},
+  {key:'hiveConqueror', name:'Hive Conqueror', desc:'Best single Hive run', guide:'Enter The Hive (Arena → The Hive) and see how many waves you can clear in a single run before your Skrambeast falls.', getValue: ()=> state.stats.hiveBestKillCount||0, tiers:[10,25,75,200,500]},
+  {key:'swarmSlayer', name:'Swarm Slayer', desc:'Total Hive kills, all runs combined', guide:'Every monster defeated in The Hive counts toward this, across every run you ever attempt.', getValue: ()=> state.stats.hiveTotalKills||0, tiers:[50,250,1000,5000,20000]},
+  {key:'hiveLegendarySlayer', name:'Against the Odds', desc:'Defeat Legendary-tier Hive opponents', guide:'Push deep enough into The Hive and the opponents you face start skewing toward Legendary rarity - defeat some of them.', getValue: ()=> state.stats.hiveLegendaryWins||0, tiers:[1,5,20,75,200]},
+  {key:'hiveFullyStocked', name:'Fully Stocked', desc:'Try every Hive checkpoint bonus', guide:'Every time you reach a checkpoint in The Hive, you can pick one free bonus. Try all 5 different kinds across your runs.', getValue: ()=> (state.hiveShopKeysUsed||[]).length, tiers:[1,2,3,4,5]},
+  {key:'hiveRegular', name:'Checkpoint Regular', desc:'Reach Hive checkpoints', guide:'Every 25 kills in The Hive triggers a checkpoint - reach enough of them, across as many runs as it takes.', getValue: ()=> state.stats.hiveCheckpointsReached||0, tiers:[1,5,20,50,150]},
   {key:'globalAce', name:'Global Ace', desc:"Rank on the Global leaderboard", guide:"Open Friends > Global to see how you stack up against every hunter, not just your friends. Earning more Hunter XP climbs you higher - the top 20 make the board at all.", getValue: ()=> state.stats.bestGlobalRank ? Math.max(0, 21-state.stats.bestGlobalRank) : 0, tiers:[1,11,16,18,20]},
 ];
 function achievementsUnlockedCount(){
@@ -1958,7 +2024,7 @@ function showNextAchievementPopup(){
   const next = achievementPopupQueue[0];
   showAchievementPopup(next.cat, next.tierIdx, ()=>{
     achievementPopupQueue.shift();
-    showNextAchievementPopup();
+    setTimeout(showNextAchievementPopup, 700);
   });
 }
 function showAchievementPopup(cat, tierIdx, onClose){
@@ -1976,6 +2042,7 @@ function showAchievementPopup(cat, tierIdx, onClose){
     <div class="buttons-row"><button class="btn yolk small full" id="achPopupClose">Nice!</button></div>
   </div>`;
   document.body.appendChild(overlay);
+  sfxAchievement();
   let resolved = false;
   const closeOnce = ()=>{ if(resolved) return; resolved = true; overlay.remove(); onClose(); };
   document.getElementById('achPopupClose').addEventListener('click', closeOnce);
@@ -2151,6 +2218,7 @@ function showRankUpCelebration(rank){
   </div>`;
   document.body.appendChild(overlay);
   showFireworks(3000);
+  sfxRankUp();
   document.getElementById('rankUpClose').addEventListener('click', ()=> overlay.remove());
   document.getElementById('rankShareBtn').addEventListener('click', ()=> shareRankUp(rank));
 }
@@ -2425,7 +2493,7 @@ const COSTUME_ITEMS = [
   {key:'championBelt', name:'Champion Belt', desc:'Purely cosmetic - visible on your Skrambeast', cost:150},
   {key:'heroCape', name:'Hero Cape', desc:'Purely cosmetic - visible on your Skrambeast', cost:180},
   {key:'coolGlasses', name:'Cool Glasses', desc:'Purely cosmetic - visible on your Skrambeast', cost:120},
-  {key:'queensCrown', name:"Queen's Crown", desc:"A rare trophy dropped by a defeated wild Queen - purely cosmetic. Can't be sold, but can be traded.", cost:0, queensCrown:true, noSell:true},
+  {key:'queensCrown', name:"Queen's Crown", desc:"A rare trophy from a wild Queen - purely cosmetic, but confuses any Queen you fight while wearing it. Can be sold or traded.", cost:50000, queensCrown:true},
   {key:'partyHatYellow', name:'Yellow Party Hat', desc:'Collectible - mystery box only', cost:0, partyHat:true, color:'#F2E205'},
   {key:'partyHatWhite', name:'White Party Hat', desc:'Collectible - mystery box only', cost:0, partyHat:true, color:'#F5F5F5'},
   {key:'partyHatRed', name:'Red Party Hat', desc:'Collectible - mystery box only', cost:0, partyHat:true, color:'#D4322C'},
@@ -2477,6 +2545,9 @@ function effectiveStatsWithBuff(m){
   if(buff && buff.power) fs.power = Math.round(fs.power*buff.power);
   if(buff && buff.guard) fs.guard = Math.round(fs.guard*buff.guard);
   if(buff && buff.hp) fs.hp = Math.round(fs.hp*buff.hp);
+  if(buff && buff.powerAdd) fs.power += buff.powerAdd;
+  if(buff && buff.guardAdd) fs.guard += buff.guardAdd;
+  if(buff && buff.hpAdd) fs.hp += buff.hpAdd;
   return fs;
 }
 function hasRestBand(m){
@@ -2691,11 +2762,11 @@ function showSettingsModal(){
     <button class="modal-close" id="settingsCloseX">${iconClose()}</button>
     <div class="pixel md" style="text-align:center;">Settings</div>
     ${toggleRow('soundEffects','Sound Effects')}
-    ${toggleRow('reducedMotion','Reduced Motion','Turns off bounce, shimmer and confetti effects')}
-    ${toggleRow('colorblindSafe','Colourblind-Safe Rarity','Adds a border pattern alongside rarity colour')}
-    ${toggleRow('highContrast','High Contrast','Bolder text and borders throughout')}
-    ${toggleRow('lightMode','Light Mode','Swaps the dark shell for a light one')}
-    ${toggleRow('autoFighter','Auto Fighter','Fights automatically at a steady pace, for players unable to tap')}
+    ${toggleRow('reducedMotion','Reduced Motion','No bounce, shimmer, or confetti')}
+    ${toggleRow('colorblindSafe','Colourblind-Safe Rarity','Border pattern alongside colour')}
+    ${toggleRow('highContrast','High Contrast','Bolder text and borders')}
+    ${toggleRow('lightMode','Light Mode','Light shell instead of dark')}
+    ${toggleRow('autoFighter','Auto Fighter','Auto-battles at a steady pace')}
     <div class="section-label" style="margin-top:10px;">Hunter Username</div>
     <div class="hint">Letters and numbers only - no spaces or symbols. 3-15 characters.</div>
     <div class="manual-row" style="margin-top:4px;"><input id="settingsUsernameInput" placeholder="${escapeHtml(state.hunterCode||'')}" maxlength="15" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px;box-sizing:border-box;font-size:12px;"><button class="btn tiny yolk" id="settingsUsernameSetBtn">Set</button></div>
@@ -3398,29 +3469,328 @@ function opponentTickInterval(wild){
 // Builds and runs a full interactive tap battle inside targetEl, using suffix to namespace
 // element IDs so wild encounters ('') and Arena ('A') can share this one implementation
 // while staying compatible with the existing finishEncounterBattle/finishArenaBattle.
-function runTapBattle(fighter, wild, targetEl, suffix, onComplete){
+const SPECIAL_BAR_SEGMENTS = 6;
+const SPECIAL_BAR_HITS_PER_SEGMENT = 3;
+function specialBarHTML(idPrefix){
+  let segs = '';
+  for(let i=0;i<SPECIAL_BAR_SEGMENTS;i++) segs += `<div class="special-bar-seg" id="${idPrefix}-seg-${i}"></div>`;
+  return `<div style="text-align:center;"><div style="font-size:9px;color:#4c5443;opacity:.8;font-family:'Rubik',sans-serif;">SPECIAL</div><div class="special-bar" id="${idPrefix}-bar">${segs}</div></div>`;
+}
+function createSpecialAttackController(idPrefix, opponentContainerEl, onSpecialAttack){
+  let hits=0, filledSegs=0, circleShown=false, circleTimer=null, flashTimer=null;
+  const maxHits = SPECIAL_BAR_SEGMENTS*SPECIAL_BAR_HITS_PER_SEGMENT;
+  function updateSegs(){
+    for(let i=0;i<SPECIAL_BAR_SEGMENTS;i++){
+      const el = document.getElementById(`${idPrefix}-seg-${i}`);
+      if(el) el.classList.toggle('filled', i<filledSegs);
+    }
+  }
+  function showCircle(){
+    circleShown = true;
+    const circle = document.createElement('div');
+    circle.className = 'special-tap-circle';
+    opponentContainerEl.appendChild(circle);
+    let tapped = false;
+    function cleanup(){
+      clearTimeout(flashTimer); clearTimeout(circleTimer);
+      circle.remove();
+      circleShown=false; hits=0; filledSegs=0; updateSegs();
+    }
+    circle.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(tapped) return; tapped = true;
+      const boom = document.createElement('div');
+      boom.className = 'special-explosion'; boom.innerHTML = '<span></span>';
+      opponentContainerEl.appendChild(boom);
+      setTimeout(()=> boom.remove(), 550);
+      onSpecialAttack();
+      cleanup();
+    });
+    flashTimer = setTimeout(()=> circle.classList.add('flashing'), 1000);
+    circleTimer = setTimeout(()=>{ if(!tapped) cleanup(); }, 3000);
+  }
+  return {
+    registerHit(){
+      if(circleShown) return;
+      hits++;
+      filledSegs = Math.min(SPECIAL_BAR_SEGMENTS, Math.floor(hits/SPECIAL_BAR_HITS_PER_SEGMENT));
+      updateSegs();
+      if(hits>=maxHits) showCircle();
+    },
+    isActive(){ return circleShown; }
+  };
+}
+const HIVE_CHECKPOINT_INTERVAL = 25;
+const HIVE_HP_REGEN_PCT = 0.08; // partial recovery after each win - not full healing, just enough to make a long run survivable for a well-prepared monster
+const HIVE_SHOP_ITEMS = [
+  {key:'hp', name:'+50 HP', desc:'Extra health for this stretch of waves', longDesc:'Adds 50 to your Skrambeast\'s max HP for every wave until your next checkpoint. Since there\'s no healing in The Hive, extra HP directly extends how long you can last.', icon:iconHeart, buff:{hpAdd:50}},
+  {key:'power', name:'+50 Power', desc:'Hit harder for this stretch of waves', longDesc:'Adds 50 Power for every wave until your next checkpoint - you\'ll clear opponents faster and take less cumulative damage along the way.', icon:iconSword, buff:{powerAdd:50}},
+  {key:'defense', name:'+50 Defense', desc:'Take less damage for this stretch of waves', longDesc:'Adds 50 Guard for every wave until your next checkpoint, reducing how much damage each hit you take actually lands for.', icon:iconShield, buff:{guardAdd:50}},
+  {key:'luck', name:'Lucky Charm', desc:'Better loot chance for this stretch of waves', longDesc:'Boosts your loot drop chance by 60% for every wave until your next checkpoint - more potions found along the way.', icon:iconClover, buff:null, luck:true},
+  {key:'reflect', name:'Reflect Damage', desc:'25% chance per hit taken to bounce 50% of it back', longDesc:'For every wave until your next checkpoint, any hit you take has a 1-in-4 chance to bounce half its damage straight back at the opponent.', icon:iconReflect, buff:{reflect:{chance:0.25, mult:0.5}}},
+];
+function hiveWaveLevel(wave){ return Math.min(150, 1+Math.floor(wave*0.42)); }
+function hiveWaveRarity(wave){
+  const t = Math.min(1, wave/550);
+  const weights = {
+    common: Math.max(0, 1-t*1.3),
+    uncommon: Math.max(0, 0.6-Math.abs(t-0.25)*1.2),
+    rare: Math.max(0, 0.6-Math.abs(t-0.5)*1.2),
+    epic: Math.max(0, 0.6-Math.abs(t-0.75)*1.2),
+    legendary: Math.max(0, (t-0.6)*2.5)
+  };
+  const total = Object.values(weights).reduce((a,b)=>a+b,0);
+  let roll = Math.random()*total;
+  for(const [rarity,w] of Object.entries(weights)){ if(roll<w) return rarity; roll-=w; }
+  return 'legendary';
+}
+function rollHiveLoot(){
+  const pool = POTION_ITEMS.filter(p=>!p.specialist);
+  return pool[Math.floor(Math.random()*pool.length)].key;
+}
+function generateHiveQueen(wave){
+  const barcode = 'hivequeen-'+Date.now()+'-'+Math.floor(Math.random()*100000);
+  const boss = generateMonster(barcode, 'legendary');
+  boss.level = hiveWaveLevel(wave);
+  boss.xp = 0;
+  boss.traits = Object.assign({}, boss.traits, {eyes:'sharp'});
+  boss.weapon = 'skybreakerFang';
+  boss.armor = 'gildedRoyalArmor';
+  recomputeStats(boss);
+  boss.stats.hp = Math.round(boss.stats.hp*1.5);
+  boss.stats.power = Math.round(boss.stats.power*1.3);
+  boss.stats.guard = Math.round(boss.stats.guard*1.2);
+  boss.name = 'Queen '+boss.name;
+  boss.defaultName = boss.name;
+  boss.isBoss = true;
+  return boss;
+}
+function applyHiveOpponentGear(opponent, wave){
+  if(wave<50) return; // no gear before this point - keeps the early game clean
+  const gearChance = Math.min(0.6, Math.max(0, (wave-50)/300));
+  if(Math.random()<gearChance){
+    const eligible = WEAPON_ITEMS.filter(w=>(w.reqLevel||0)<=opponent.level && !w.specialist);
+    if(eligible.length){
+      const w = eligible[Math.floor(Math.random()*eligible.length)];
+      opponent.weapon = w.key;
+      opponent.stats.power += w.bonus;
+    }
+  }
+  if(Math.random()<gearChance){
+    const eligible = ARMOR_ITEMS.filter(a=>(a.reqLevel||0)<=opponent.level && !a.specialist);
+    if(eligible.length){
+      const a = eligible[Math.floor(Math.random()*eligible.length)];
+      opponent.armor = a.key;
+      opponent.stats.guard += a.bonus;
+    }
+  }
+}
+function renderHive(container){
+  const favs = favoritedSquad();
+  const backBtnHtml = `<div class="buttons-row"><button class="btn tiny yolk" id="hiveBackToArenaBtn">Back</button></div>`;
+  if(state.settings.autoFighter){
+    container.innerHTML = `<div class="hint" style="color:#a13a24;text-align:center;padding:10px 0;">The Hive isn't available with Auto Fighter enabled - turn it off in Settings to enter.</div>${backBtnHtml}`;
+    document.getElementById('hiveBackToArenaBtn').addEventListener('click', ()=>{ versusCategory='arenaChoice'; renderVersus(document.getElementById('panel')); });
+    return;
+  }
+  if(favs.length===0){
+    container.innerHTML = `<div class="hint" style="color:#a13a24;text-align:center;padding:10px 0;">You need at least 1 favourite in your Squad to enter The Hive.</div><div class="buttons-row"><button class="btn cream small full" id="hiveGoSquad">Go to Squad</button></div>${backBtnHtml}`;
+    document.getElementById('hiveGoSquad').addEventListener('click', ()=> switchTab('collection'));
+    document.getElementById('hiveBackToArenaBtn').addEventListener('click', ()=>{ versusCategory='arenaChoice'; renderVersus(document.getElementById('panel')); });
+    return;
+  }
+  container.innerHTML = `
+    <div class="hint">Choose one Skrambeast to send into The Hive. No healing, no switching - just them, wave after wave, until they fall. Any active potions or bonuses will be cleared on entry.</div>
+    <div class="arena-roster" id="hiveRoster" style="flex-wrap:wrap;margin-top:8px;gap:6px;"></div>
+    <div class="buttons-row"><button class="btn coral small full" id="hiveStartBtn" disabled>Enter The Hive</button></div>
+    ${state.stats.hiveBestKillCount ? `<div class="hint" style="text-align:center;margin-top:6px;">Your best: ${state.stats.hiveBestKillCount} kills</div>` : ''}
+    ${backBtnHtml}`;
+  document.getElementById('hiveBackToArenaBtn').addEventListener('click', ()=>{ versusCategory='arenaChoice'; renderVersus(document.getElementById('panel')); });
+  const rosterEl = document.getElementById('hiveRoster');
+  let selectedId = null;
+  rosterEl.innerHTML = favs.map(m=> `<div class="arena-roster-icon${isTired(m)?' tired':''}" data-fid="${m.id}" style="flex:0 0 auto;width:60px;"><div style="width:28px;height:28px;">${monsterSVG(m,28)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
+  rosterEl.querySelectorAll('[data-fid]').forEach(el=>{
+    if(el.classList.contains('tired')) return;
+    el.addEventListener('click', ()=>{
+      rosterEl.querySelectorAll('.selected').forEach(x=>x.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedId = el.dataset.fid;
+      document.getElementById('hiveStartBtn').disabled = false;
+    });
+  });
+  document.getElementById('hiveStartBtn').addEventListener('click', ()=>{
+    const fighter = state.collection.find(m=>m.id===selectedId);
+    if(fighter) startHiveRun(fighter, container);
+  });
+}
+function startHiveRun(fighter, container){
+  fighter.buffNextBattle = null; // wipe any existing potion/battle buffs before entry
+  let kills = 0, totalXp = 0, totalCoins = 0;
+  const lootCounts = {};
+  let activeShopBuff = null, luckActive = false;
+  let carriedHp = null; // null = full HP for wave 1 only; every wave after carries over whatever's left, since there's no healing
+
+  function runNextWave(){
+    const wave = kills+1;
+    const isQueenWave = wave>=300 && (wave-300)%12===0;
+    const level = hiveWaveLevel(wave);
+    const rarity = hiveWaveRarity(wave);
+    const fakeBarcode = 'hive-'+Date.now()+'-'+Math.floor(Math.random()*100000);
+    const opponent = isQueenWave ? generateHiveQueen(wave) : generateMonster(fakeBarcode, rarity, level, true);
+    if(!isQueenWave) applyHiveOpponentGear(opponent, wave);
+    logAlmanac(opponent, 'seen');
+    fighter.buffNextBattle = activeShopBuff; // re-applied every wave since runTapBattle consumes it on each call
+    const maxHp = effectiveStatsWithBuff(fighter).hp;
+    const hpLabel = carriedHp!=null ? `${carriedHp}/${maxHp} HP` : `${maxHp}/${maxHp} HP`;
+    const killHpLabel = `<div style="font-size:9px;color:#4c5443;opacity:.8;font-family:'Rubik',sans-serif;text-align:center;">Kills: ${kills} · ${hpLabel}</div>`;
+    const queenBanner = isQueenWave ? `<div class="pixel sm" style="position:absolute;top:2px;right:2px;z-index:2;background:#D4A017;color:#1A1F1C;padding:3px 7px;border-radius:6px;font-size:10px;">👑 QUEEN WAVE</div>` : '';
+    container.innerHTML = `${killHpLabel}<div style="position:relative;">${queenBanner}<div id="hiveBattleHost"></div></div>`;
+    runTapBattle(fighter, opponent, document.getElementById('hiveBattleHost'), 'Hive', (result)=>{
+      carriedHp = result.remainingFHp;
+      if(result.won){
+        const maxHpNow = effectiveStatsWithBuff(fighter).hp;
+        carriedHp = Math.min(maxHpNow, carriedHp + Math.round(maxHpNow*HIVE_HP_REGEN_PCT));
+        kills++;
+        const rewardMult = isQueenWave ? 3 : 1;
+        const xpGain = Math.round((20+wave*1.5)*rewardMult);
+        const coinGain = Math.round((15+wave*1.2)*rewardMult);
+        totalXp += xpGain; totalCoins += coinGain;
+        addCoins(coinGain);
+        grantXP(fighter, xpGain);
+        if(rarity==='legendary' && !isQueenWave) state.stats.hiveLegendaryWins = (state.stats.hiveLegendaryWins||0)+1;
+        if(isQueenWave) state.stats.hiveQueensBeaten = (state.stats.hiveQueensBeaten||0)+1;
+        let thisWaveLoot = null;
+        if(isQueenWave && Math.random()<0.125){
+          state.inventory.queensCrown = (state.inventory.queensCrown||0)+1;
+          state.stats.crownsLifetime = (state.stats.crownsLifetime||0)+1;
+          lootCounts.queensCrown = (lootCounts.queensCrown||0)+1;
+          thisWaveLoot = 'queensCrown';
+          checkAchievements();
+        } else {
+          const lootChance = Math.min(0.5, 0.08+wave*0.001) * (luckActive?1.6:1);
+          if(Math.random()<lootChance){
+            const item = rollHiveLoot();
+            state.inventory[item] = (state.inventory[item]||0)+1;
+            lootCounts[item] = (lootCounts[item]||0)+1;
+            thisWaveLoot = item;
+          }
+        }
+        state.stats.hiveTotalKills = (state.stats.hiveTotalKills||0)+1;
+        saveState(); checkAchievements();
+        showHiveWaveResult(wave, xpGain, coinGain, thisWaveLoot, result.log, maxHpNow);
+      } else {
+        endHiveRun(false);
+      }
+    }, true, carriedHp);
+  }
+
+  function showHiveWaveResult(wave, xpGain, coinGain, thisWaveLoot, log, maxHp){
+    const atCheckpoint = kills % HIVE_CHECKPOINT_INTERVAL === 0;
+    const lastLog = log.slice(-3).join('<br>');
+    const lootItem = thisWaveLoot==='queensCrown' ? {name:"Queen's Crown"} : (thisWaveLoot ? POTION_ITEMS.find(p=>p.key===thisWaveLoot) : null);
+    container.innerHTML = `
+      <div class="battle-log" style="max-height:70px;">${lastLog}</div>
+      ${celebrationHTML(true,'WAVE CLEARED!')}
+      <div class="hint" style="text-align:center;">+${xpGain} XP · +${formatCoins(coinGain)} coins${lootItem? ' · found '+lootItem.name+'!':''}</div>
+      <div class="hint" style="text-align:center;margin-top:2px;">Kills: ${kills} · ${carriedHp}/${maxHp} HP (caught their breath - no full heal)</div>
+      <div class="buttons-row" style="margin-top:22px;"><button class="btn yolk small full" id="hiveWaveContinueBtn" disabled>${atCheckpoint? 'Continue to Checkpoint':'Continue'}</button></div>`;
+    const continueBtn = document.getElementById('hiveWaveContinueBtn');
+    setTimeout(()=>{ if(continueBtn) continueBtn.disabled = false; }, 600); // settling delay - matches the same tap-momentum fix used for achievement pop-ups
+    continueBtn.addEventListener('click', ()=>{
+      if(atCheckpoint) showHiveCheckpoint(); else runNextWave();
+    });
+  }
+  function showHiveCheckpoint(){
+    activeShopBuff = null; luckActive = false; // the previous stretch's pick has expired
+    let selectedItem = null;
+    state.stats.hiveCheckpointsReached = (state.stats.hiveCheckpointsReached||0)+1; // reaching the checkpoint is the event, regardless of what gets picked here
+    saveState(); checkAchievements();
+    container.innerHTML = `
+      <div class="pixel md" style="text-align:center;">Checkpoint - ${kills} kills!</div>
+      <div class="hint" style="text-align:center;">Pick one free bonus for your next stretch of waves:</div>
+      <div id="hiveShopList" style="margin-top:6px;"></div>
+      <div class="buttons-row"><button class="btn yolk small full" id="hiveContinueBtn">Continue Battle</button></div>
+      <div class="buttons-row"><button class="btn yolk small full" id="hiveExitBtn">Exit Hive</button></div>`;
+    const listEl = document.getElementById('hiveShopList');
+    listEl.innerHTML = HIVE_SHOP_ITEMS.map(it=> `<div class="store-item" data-shop-key="${it.key}" style="cursor:pointer;"><div style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;">${it.icon()}</div><div class="sinfo"><div class="sname">${it.name}</div><div class="sdesc">${it.desc}</div></div><button class="btn tiny cream" data-info-key="${it.key}" style="padding:3px 7px;">ⓘ</button></div>`).join('');
+    listEl.querySelectorAll('[data-shop-key]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const item = HIVE_SHOP_ITEMS.find(x=>x.key===el.dataset.shopKey);
+        selectedItem = item;
+        listEl.querySelectorAll('.store-item').forEach(x=> x.style.boxShadow='');
+        el.style.boxShadow = '0 0 0 3px #E8542E';
+        if(item.luck){ luckActive = true; activeShopBuff = null; }
+        else { luckActive = false; activeShopBuff = item.buff; }
+        showToast(`${item.name} selected for the next stretch!`);
+      });
+    });
+    listEl.querySelectorAll('[data-info-key]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const item = HIVE_SHOP_ITEMS.find(x=>x.key===btn.dataset.infoKey);
+        showItemDetailPopup(item, i=>i.longDesc, item.icon(), '#8FA998');
+      });
+    });
+    document.getElementById('hiveContinueBtn').addEventListener('click', ()=>{
+      if(selectedItem){
+        if(!state.hiveShopKeysUsed) state.hiveShopKeysUsed = [];
+        if(!state.hiveShopKeysUsed.includes(selectedItem.key)) state.hiveShopKeysUsed.push(selectedItem.key);
+        saveState(); checkAchievements();
+      }
+      runNextWave();
+    });
+    document.getElementById('hiveExitBtn').addEventListener('click', ()=>{
+      showConfirm(`End this Hive run at ${kills} kills? Everything you've earned so far is already safely yours - this just ends your current streak.`, ()=> endHiveRun(true), {confirmLabel:'Yes, exit'});
+    });
+  }
+
+  function endHiveRun(voluntary){
+    fighter.buffNextBattle = null;
+    const restMs = kills*10000;
+    fighter.tiredUntil = Date.now()+restMs; fighter.restTotalMs = restMs;
+    state.stats.hiveBestKillCount = Math.max(state.stats.hiveBestKillCount||0, kills);
+    saveState(); checkAchievements();
+    const lootList = Object.entries(lootCounts).map(([k,v])=>{ const name = k==='queensCrown' ? "Queen's Crown" : (POTION_ITEMS.find(x=>x.key===k)||{}).name || k; return `${v}x ${name}`; }).join(', ') || 'None';
+    container.innerHTML = `
+      ${celebrationHTML(voluntary,'RUN COMPLETE!')}
+      <div class="log-row"><div class="log-info"><div class="log-name">Monsters Defeated</div></div><div class="log-status" style="background:#a13a24;">${kills}</div></div>
+      <div class="log-row"><div class="log-info"><div class="log-name">Total XP Earned</div></div><div class="log-status" style="background:#9B5DE5;">${totalXp}</div></div>
+      <div class="log-row"><div class="log-info"><div class="log-name">Total Coins Earned</div></div><div class="log-status" style="background:#D4A017;">${formatCoins(totalCoins)}</div></div>
+      <div class="log-row"><div class="log-info"><div class="log-name">Loot Found</div></div><div class="log-status" style="background:#3f6b4a;font-size:9px;">${lootList}</div></div>
+      <div class="hint" style="text-align:center;margin-top:8px;">${escapeHtml(fighter.name)} needs ${eggCountdownLabel(restMs)} to recover.</div>
+      <div class="buttons-row"><button class="btn yolk small full" id="hiveBackBtn">Back to Arena</button></div>`;
+    document.getElementById('hiveBackBtn').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(document.getElementById('panel')); });
+  }
+
+  runNextWave();
+}
+function runTapBattle(fighter, wild, targetEl, suffix, onComplete, skipTiredness, startingHp){
   const tired = isTired(fighter), penalty = tired?0.85:1;
   const fs = effectiveStats(fighter);
   const buff = fighter.buffNextBattle;
   if(buff && buff.power) fs.power = Math.round(fs.power*buff.power);
   if(buff && buff.guard) fs.guard = Math.round(fs.guard*buff.guard);
   if(buff && buff.hp) fs.hp = Math.round(fs.hp*buff.hp);
+  if(buff && buff.powerAdd) fs.power += buff.powerAdd;
+  if(buff && buff.guardAdd) fs.guard += buff.guardAdd;
+  if(buff && buff.hpAdd) fs.hp += buff.hpAdd;
   const armor = fighter.armor ? ARMOR_ITEMS.find(a=>a.key===fighter.armor) : null;
-  markTired(fighter); fighter.buffNextBattle=null; // engaging tires them regardless of how the fight goes
-  let fHp=fs.hp, wHp=wild.stats.hp;
+  if(!skipTiredness){ markTired(fighter); fighter.buffNextBattle=null; }
+  let fHp=(startingHp!=null) ? Math.min(startingHp, fs.hp) : fs.hp, wHp=wild.stats.hp;
   const maxFHp=fs.hp, maxWHp=wild.stats.hp;
   const log = [];
   let playerHitCount = 0, lastTapAt = 0, resolved = false, opponentTimer=null, safetyTimer=null, quickReflex=false, autoFighterTimer=null;
   const powerRatio = Math.min(1, Math.max(0, (fs.power - wild.stats.guard) / Math.max(1,wild.stats.guard)));
 
-  const ids = { fBar:'fHpBar'+suffix, wBar:'wHpBar'+suffix, fPop:'fDmgPop'+suffix, wPop:'wDmgPop'+suffix, tapZone:'tapZone'+suffix, countdown:'tapCountdown'+suffix, timer:'battleTimer'+suffix, log: suffix?'arenaBattleLog':'battleLog' };
+  const ids = { fBar:'fHpBar'+suffix, wBar:'wHpBar'+suffix, fPop:'fDmgPop'+suffix, wPop:'wDmgPop'+suffix, tapZone:'tapZone'+suffix, countdown:'tapCountdown'+suffix, timer:'battleTimer'+suffix, log: suffix?'arenaBattleLog':'battleLog', special:'special'+suffix, wFighter:'wFighter'+suffix };
   targetEl.innerHTML = `
     <div class="pixel sm" style="text-align:center; color:#666; margin-bottom:-4px;">Timer</div>
     <div id="${ids.timer}" style="color:var(--coral); font-family:'Baloo 2',sans-serif; font-weight:800; font-size:24px; text-align:center; width:100%;">20.00</div>
+    ${specialBarHTML(ids.special)}
     <div class="battle-arena">
       <div class="battle-side"><div class="hp-bar-wrap"><div class="hp-bar-fill" id="${ids.fBar}"></div></div><div class="battle-fighter left float">${monsterSVG(fighter,80)}<div class="dmg-pop" id="${ids.fPop}"></div></div></div>
       <div class="tap-center" id="${ids.tapZone}"><div class="tap-countdown" id="${ids.countdown}"></div></div>
-      <div class="battle-side"><div class="hp-bar-wrap"><div class="hp-bar-fill" id="${ids.wBar}"></div></div><div class="battle-fighter right float">${monsterSVG(wild,80)}<div class="dmg-pop" id="${ids.wPop}"></div></div></div>
+      <div class="battle-side"><div class="hp-bar-wrap"><div class="hp-bar-fill" id="${ids.wBar}"></div></div><div class="battle-fighter right float" id="${ids.wFighter}">${monsterSVG(wild,80)}<div class="dmg-pop" id="${ids.wPop}"></div></div></div>
     </div>
     ${suffix? '' : `<div class="pixel sm">${fighter.name} vs ${wild.name}</div>`}
     <div class="battle-log-label">Battle Log${isMaxHitActive()?' <span style="color:#E8542E;">- MAX HITS ACTIVE</span>':''}</div>
@@ -3429,6 +3799,12 @@ function runTapBattle(fighter, wild, targetEl, suffix, onComplete){
   const fPop=document.getElementById(ids.fPop), wPop=document.getElementById(ids.wPop);
   const logEl=document.getElementById(ids.log), countdownEl=document.getElementById(ids.countdown), tapZone=document.getElementById(ids.tapZone);
   const timerEl=document.getElementById(ids.timer);
+  const specialCtrl = createSpecialAttackController(ids.special, document.getElementById(ids.wFighter), ()=>{
+    const specialDmg = fs.power+3;
+    wHp -= specialDmg; popDmg(wPop, specialDmg); addLog(`${fighter.name} unleashes a special attack for ${specialDmg}!`); sfxCritical();
+    updateBars();
+    if(wHp<=0) finish(true);
+  });
   let battleStartAt=0, timerInterval=null;
 
   function updateBars(){
@@ -3445,16 +3821,28 @@ function runTapBattle(fighter, wild, targetEl, suffix, onComplete){
     tapZone.removeEventListener('click', onTap);
     tapZone.style.visibility='hidden';
     const won = fHp<=0 ? false : (wHp<=0 ? true : (fHp/maxFHp) >= (wHp/maxWHp)); // time-out edge case: whoever has more HP% left wins
-    onComplete({ log, won, oneHitKO: !!oneHitKO, maxFHp, maxWHp });
+    onComplete({ log, won, oneHitKO: !!oneHitKO, maxFHp, maxWHp, remainingFHp: Math.max(0,fHp) });
   }
   function opponentTick(){
     if(resolved) return;
     const dmg = Math.max(1, Math.round(wild.stats.power - fs.guard*penalty*0.4 + (Math.random()*6-3)));
+    if(wild.isBoss && fighter.costume==='queensCrown' && Math.random()<0.2){
+      wHp-=dmg; popDmg(wPop, dmg); sfxCritical(); updateBars();
+      addLog(`${wild.name} is confused by her own Crown! The attack bounces back for ${dmg}!`);
+      state.stats.queenConfusedCount = (state.stats.queenConfusedCount||0)+1;
+      if(wHp<=0){ finish(false); return; }
+      return; // the hit was reflected - the fighter takes nothing this turn
+    }
     fHp -= dmg; popDmg(fPop, dmg); sfxHit(); updateBars();
     addLog(`${wild.name} hits ${fighter.name} for ${dmg}.`);
     if(armor && Math.random()<armor.recoil){
       const counter=Math.max(1,Math.round(dmg*0.4)); wHp-=counter; popDmg(wPop, counter); updateBars();
       addLog(`${fighter.name}'s armour counters for ${counter}!`);
+      if(wHp<=0){ finish(false); return; }
+    }
+    if(buff && buff.reflect && Math.random()<buff.reflect.chance){
+      const reflected=Math.max(1,Math.round(dmg*buff.reflect.mult)); wHp-=reflected; popDmg(wPop, reflected); updateBars();
+      addLog(`${fighter.name} reflects ${reflected} damage back!`);
       if(wHp<=0){ finish(false); return; }
     }
     if(fHp<=0){ finish(false); return; }
@@ -3472,7 +3860,8 @@ function runTapBattle(fighter, wild, targetEl, suffix, onComplete){
     const typeMult = typeMatchupMultiplier(fighter.type, wild.type);
     dmg = Math.round(dmg*typeMult);
     const burnDmg = weaponBurnDamage(fighter, wHp);
-    wHp -= (dmg+burnDmg); playerHitCount++; popDmg(wPop, dmg+burnDmg); sfxHit(); updateBars();
+    wHp -= (dmg+burnDmg); playerHitCount++; popDmg(wPop, dmg+burnDmg); sfxHit(); if(isCrit) sfxCritical(); updateBars();
+    specialCtrl.registerHit();
     if(isCrit) incrementQuestProgress('critHits');
     if(typeMult>1) incrementQuestProgress('superEffective');
     addLog(`${fighter.name} hits ${wild.name} for ${dmg}.${isCrit?' Critical hit!':''}${typeMult>1?' Super effective!':typeMult<1?' Not very effective.':''}${burnDmg>0?` Burns for ${burnDmg} more!`:''}`);
@@ -3751,6 +4140,7 @@ function releaseMonster(id){
 function closeDetailModal(overlay){
   if(overlay._boostTimerInterval) clearInterval(overlay._boostTimerInterval);
   overlay.remove();
+  void document.body.offsetHeight; // forces a clean repaint boundary before the next DOM rebuild - see comment on the reported static/interlace glitch
   const panel = document.getElementById('panel');
   if(currentTab==='collection' && squadSubView==='squad'){ renderSquadGrid(panel); }
   else renderTab();
@@ -3771,7 +4161,7 @@ function openDetailModal(m, editable, allowEquip){
       <div class="hint" id="modalBoostTimer" style="position:absolute;top:16px;right:42px;color:#9B5DE5;font-weight:700;text-align:right;"></div>
       <div class="mini-svg float" id="modalIcon" style="width:110px;height:110px;margin:0 auto;border-radius:50%;display:flex;justify-content:center;align-items:center;${auraStyle(m)}">${monsterSVG(m,110)}</div>
       ${editable? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;"><div class="pixel md" id="modalNameDisplay">${escapeHtml(m.name)}</div><button class="btn tiny cream" id="modalRenameBtn" style="padding:3px 7px;font-size:12px;" aria-label="Rename">✏</button></div>` : `<div class="pixel md" style="text-align:center;">${m.name}</div>`}
-      <div class="pixel sm" style="text-align:center;">${typeIcon(m.type,13)} ${m.typeLabel} · ${rs.label}${m.holo?' · HOLO':''} · Lv.${m.level}${isMaxed(m)?` ${iconTrophy(13,rs.color)}`:''}</div>
+      <div class="pixel sm" style="text-align:center;">${typeIcon(m.type,13)} ${m.typeLabel} · ${m.isBoss?'QUEEN':rs.label}${m.holo?' · HOLO':''} · Lv.${m.level}${isMaxed(m)?` ${iconTrophy(13,rs.color)}`:''}</div>
       ${xpBar}
       <div class="stat-row" id="modalStatRow" style="margin-top:6px;">${statLine(es)}</div>
       <div class="hint" id="modalMaxHit" style="text-align:center;">Max Hit: ${es.power+3}</div>
@@ -3903,7 +4293,7 @@ function renderModalActions(container, m, overlay, allowEquip){
     const w = WEAPON_ITEMS.find(x=>x.key===key);
     if(!w || (state.inventory[key]||0)<=0) return;
     if(m.level < w.reqLevel){ showToast(`${m.name} needs to be Lv.${w.reqLevel}+ to wield the ${w.name}`); return; }
-    state.inventory[key]-=1; m.weapon=key; saveState(); incrementQuestProgress('equipGear'); renderModalActions(container,m,overlay);
+    state.inventory[key]-=1; m.weapon=key; saveState(); incrementQuestProgress('equipGear'); renderModalActions(container,m,overlay); sfxEquip();
   });
   const unequipWeaponBtn = document.getElementById('modalUnequipWeapon');
   if(unequipWeaponBtn) unequipWeaponBtn.addEventListener('click', ()=>{
@@ -3916,7 +4306,7 @@ function renderModalActions(container, m, overlay, allowEquip){
     const a = ARMOR_ITEMS.find(x=>x.key===key);
     if(!a || (state.inventory[key]||0)<=0) return;
     if(m.level < a.reqLevel){ showToast(`${m.name} needs to be Lv.${a.reqLevel}+ to wear the ${a.name}`); return; }
-    state.inventory[key]-=1; m.armor=key; saveState(); incrementQuestProgress('equipGear'); renderModalActions(container,m,overlay);
+    state.inventory[key]-=1; m.armor=key; saveState(); incrementQuestProgress('equipGear'); renderModalActions(container,m,overlay); sfxEquip();
   });
   const unequipArmorBtn = document.getElementById('modalUnequipArmor');
   if(unequipArmorBtn) unequipArmorBtn.addEventListener('click', ()=>{
@@ -3929,7 +4319,7 @@ function renderModalActions(container, m, overlay, allowEquip){
     const sh = SHIELD_ITEMS.find(x=>x.key===key);
     if(!sh || (state.inventory[key]||0)<=0) return;
     if(m.level < sh.reqLevel){ showToast(`${m.name} needs to be Lv.${sh.reqLevel}+ to carry the ${sh.name}`); return; }
-    state.inventory[key]-=1; m.shield=key; saveState(); incrementQuestProgress('equipGear'); renderModalActions(container,m,overlay);
+    state.inventory[key]-=1; m.shield=key; saveState(); incrementQuestProgress('equipGear'); renderModalActions(container,m,overlay); sfxEquip();
   });
   const unequipShieldBtn = document.getElementById('modalUnequipShield');
   if(unequipShieldBtn) unequipShieldBtn.addEventListener('click', ()=>{
@@ -3940,7 +4330,7 @@ function renderModalActions(container, m, overlay, allowEquip){
   if(costumeEquipBtn) costumeEquipBtn.addEventListener('click', ()=>{
     const key = document.getElementById('modalCostumeSelect').value;
     if(!key || (state.inventory[key]||0)<=0) return;
-    state.inventory[key]-=1; m.costume=key; saveState(); renderModalActions(container,m,overlay);
+    state.inventory[key]-=1; m.costume=key; saveState(); renderModalActions(container,m,overlay); sfxEquip();
   });
   const unequipCostumeBtn = document.getElementById('modalUnequipCostume');
   if(unequipCostumeBtn) unequipCostumeBtn.addEventListener('click', ()=>{
@@ -4432,6 +4822,8 @@ const GAME_SECRETS = [
   "Somewhere in Settings, a toggle exists that calms the whole shell down - no bounce, no shimmer, no confetti. Some players prefer the quiet.",
   "Every so often, a Skrambeast comes out looking just a little different from its own kind - same everything else, just a shinier coat. Nobody knows the odds. They're just rare.",
   "Level caps rise in neat steps of 30 all the way up: Common tops out at 30, Uncommon at 60, Rare at 90, Epic at 120, Legendary at 150.",
+  "The Hive doesn't care how good your run feels early on - it only gets harder from there, and there's no healing to save you. Seeing truly deep waves takes a Skrambeast at the very top of its level, not just a strong one.",
+  "Nobody clears The Hive by luck alone. Even a maxed-out Skrambeast will find its run ending in a different place each time - it's a matter of how far, not whether.",
   "A tired Skrambeast is easier to beat and less reliable in a fight - rotate your squad instead of pushing through.",
   "Somewhere beyond seven figures sits a blade that makes your best current weapon look like the first one you ever bought.",
   "Scanner Upgrades boost your odds when trying to catch something new - stack them before you commit.",
@@ -4533,10 +4925,10 @@ function renderEncyclopedia(container){
   const entries = Object.values(state.almanac).filter(e=>{
     if(encyclopediaFilter==='all') return true;
     if(encyclopediaFilter==='boss') return !!e.isBoss;
-    return e.rarity===encyclopediaFilter;
+    return e.rarity===encyclopediaFilter && !e.isBoss;
   }).sort((a,b)=>b.timestamp-a.timestamp);
   const filterKeys = ['all',...RARITY_ORDER,'boss'];
-  const filterLabel = r=> r==='all'?'ALL':r==='boss'?'BOSSES':SQUAD_FILTER_LABEL[r].toUpperCase();
+  const filterLabel = r=> r==='all'?'ALL':r==='boss'?'QUEENS':SQUAD_FILTER_LABEL[r].toUpperCase();
   const filterBtn = r=> `<button class="btn tiny ${encyclopediaFilter===r?'yolk':'cream'}" style="padding:3px 6px;font-size:9px;" data-filter="${r}">${filterLabel(r)}</button>`;
   const filterBtnsRow1 = filterKeys.slice(0,4).map(filterBtn).join('');
   const filterBtnsRow2 = filterKeys.slice(4).map(filterBtn).join('');
@@ -4625,6 +5017,16 @@ function renderStatsPanel(container, panel){
         ${byType.map(x=> row(x.t.label, x.count, x.t.color)).join('')}
         <div class="section-label" style="margin-top:8px;">Time</div>
         ${row('Total Time Played', formatPlayTime(s.totalPlayTimeMs||0), '#9B5DE5')}`;
+    },
+    ()=>{
+      return `
+        <div class="section-label">The Hive</div>
+        ${row('Best Run (kills)', s.hiveBestKillCount||0, '#a13a24')}
+        ${row('Lifetime Hive Kills', s.hiveTotalKills||0, '#a13a24')}
+        ${row('Legendary Opponents Beaten', s.hiveLegendaryWins||0, '#D4A017')}
+        ${row('Queens Beaten', s.hiveQueensBeaten||0, '#D4A017')}
+        ${row('Checkpoints Reached', s.hiveCheckpointsReached||0, '#9B5DE5')}
+        ${row('Checkpoint Bonuses Tried', (state.hiveShopKeysUsed||[]).length+'/5', '#3f6b4a')}`;
     }
   ];
   const totalPages = pages.length;
@@ -5357,15 +5759,21 @@ function startBossTrainingBattle(boss, container){
     <div style="text-align:center;width:100%;">
       <div class="pixel sm" style="color:#a13a24;">${boss.name}</div>
       <div class="hp-bar-wrap" style="width:140px;margin:4px auto;"><div class="hp-bar-fill" id="btHpBar"></div></div>
-      <div class="float" style="margin:4px auto;display:flex;justify-content:center;">${monsterSVG(boss,90)}</div>
+      <div class="float" id="btFighterWrap" style="margin:4px auto;display:flex;justify-content:center;position:relative;">${monsterSVG(boss,90)}</div>
     </div>
-    <div class="tap-center" id="btTapZone" style="margin:8px auto;"><div class="tap-countdown" id="btCountdown"></div></div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto;"><div class="tap-center" id="btTapZone"><div class="tap-countdown" id="btCountdown"></div></div>${specialBarHTML('btSpecial')}</div>
     <div class="arena-roster" id="btRoster"></div>
     <div class="battle-log-label">Battle Log${isMaxHitActive()?' <span style="color:#E8542E;">- MAX HITS ACTIVE</span>':''}</div>
     <div class="battle-log" id="btBattleLog"></div>`;
   const bossBar=document.getElementById('btHpBar');
   const logEl=document.getElementById('btBattleLog'), countdownEl=document.getElementById('btCountdown'), tapZone=document.getElementById('btTapZone');
   const rosterEl=document.getElementById('btRoster');
+  const specialCtrl = createSpecialAttackController('btSpecial', document.getElementById('btFighterWrap'), ()=>{
+    const specialDmg = effectiveStatsWithBuff(team[activeIdx]).power+3;
+    wHp -= specialDmg; addLog(`${team[activeIdx].name} unleashes a special attack for ${specialDmg}!`); sfxCritical();
+    updateBars();
+    if(wHp<=0) finish(true);
+  });
 
   function renderRoster(){
     rosterEl.innerHTML = team.map((m,i)=> `<div class="arena-roster-icon${i===activeIdx?' selected':''}" style="${fainted[i]?'opacity:.3;':''}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
@@ -5412,6 +5820,7 @@ function startBossTrainingBattle(boss, container){
     dmg = Math.round(dmg*typeMult);
     const burnDmg = weaponBurnDamage(team[activeIdx], wHp);
     wHp -= (dmg+burnDmg); sfxHit();
+    specialCtrl.registerHit();
     addLog(`${team[activeIdx].name} hits ${boss.name} for ${dmg}.${typeMult>1?' Super effective!':typeMult<1?' Not very effective.':''}${burnDmg>0?` Burns for ${burnDmg} more!`:''}`);
     tapZone.classList.remove('tap-pulse'); void tapZone.offsetWidth; tapZone.classList.add('tap-pulse');
     updateBars();
@@ -5746,11 +6155,14 @@ function renderVersus(panel){
       <div id="incomingBattleRequestSlot"></div>
       <div class="section-label">Choose how to play</div>
       <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#4E8FD1',52)}</div><div class="vs-center"><span id="easterEgg3BtIcon" style="cursor:pointer;display:inline-flex;">${iconBluetooth(30)}</span></div><div class="vs-side">${genericMonsterIcon('#E8542E',52)}</div></div>
-      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcNearby">Battle by Code</button></div>
+      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcNearby">Player VS Player</button></div>
+      <div class="hint" style="text-align:center;margin-top:4px;">Trade or duel another hunter, by code or instantly.</div>
       <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#8FA998',52)}</div><div class="vs-center"><span class="vs-badge">VS</span></div><div class="vs-side">${genericMonsterIcon('#F77F00',52)}</div></div>
-      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcArena">Arena (Train Solo)</button></div>
+      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcArena">Battle Arena</button></div>
+      <div class="hint" style="text-align:center;margin-top:4px;">Train solo against a generated opponent.</div>
       <div class="vs-illustration"><div class="vs-side"><div class="vs-squad-cluster" id="bossSquadGraphic" style="cursor:pointer;"><div class="vs-squad-row">${miniMonsterIcon('#4E8FD1',15)}${miniMonsterIcon('#E8542E',15)}</div><div class="vs-squad-row">${miniMonsterIcon('#5CA85C',15)}${miniMonsterIcon('#F2C13D',15)}${miniMonsterIcon('#9B5DE5',15)}</div></div></div><div class="vs-center"><span class="vs-badge">VS</span></div><div class="vs-side">${genericMonsterIcon('#D4A017',58)}</div></div>
-      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcBoss">Boss Training</button></div>`;
+      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcBoss">Boss Training</button></div>
+      <div class="hint" style="text-align:center;margin-top:4px;">Safely practice against a Queen you've found.</div>`;
     checkIncomingBattleRequest().then(req=>{
       if(!req) return;
       const slot = document.getElementById('incomingBattleRequestSlot');
@@ -5769,7 +6181,7 @@ function renderVersus(panel){
       });
     });
     document.getElementById('vcNearby').addEventListener('click', ()=>{ versusCategory='nearby'; renderVersus(panel); });
-    document.getElementById('vcArena').addEventListener('click', ()=>{ versusCategory='arena'; renderVersus(panel); });
+    document.getElementById('vcArena').addEventListener('click', ()=>{ versusCategory='arenaChoice'; renderVersus(panel); });
     document.getElementById('vcBoss').addEventListener('click', ()=>{ versusCategory='boss'; renderVersus(panel); });
     document.getElementById('bossSquadGraphic').addEventListener('click', ()=>{
       if(!state.easterEggClickCounts) state.easterEggClickCounts={};
@@ -5804,8 +6216,22 @@ function renderVersus(panel){
     if(!el){ clearInterval(vsBoostTickTimer); return; }
     if(el.innerHTML.trim()!=='') el.innerHTML = activeBoostTimersHTML(); // only refresh once a battle has actually populated it - never re-populate a deliberately-empty prep screen
   }, 1000);
+  if(versusCategory==='arenaChoice'){
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">BATTLE ARENA</div>${backRow}</div>
+      <div class="section-label" style="margin-top:6px;">Choose your training</div>
+      <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#8FA998',52)}</div><div class="vs-center"><span class="vs-badge">VS</span></div><div class="vs-side">${genericMonsterIcon('#F77F00',52)}</div></div>
+      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcNormalTraining">Normal Training</button></div>
+      <div class="hint" style="text-align:center;margin-top:4px;">A single practice fight against a generated opponent.</div>
+      <div class="vs-illustration"><div class="vs-side"><div class="vs-squad-cluster" style="opacity:.9;"><div class="vs-squad-row">${miniMonsterIcon('#F2C13D',13)}${miniMonsterIcon('#E8542E',13)}${miniMonsterIcon('#9B5DE5',13)}</div><div class="vs-squad-row">${miniMonsterIcon('#4E8FD1',13)}${miniMonsterIcon('#5CA85C',13)}${miniMonsterIcon('#D4A017',13)}${miniMonsterIcon('#8FA998',13)}</div></div></div><div class="vs-center"><span class="vs-badge" style="color:#D4A017;">∞</span></div><div class="vs-side">${genericMonsterIcon('#a13a24',58)}</div></div>
+      <div class="buttons-row"><button class="btn coral small full vs-menu-btn" id="vcHive">The Hive</button></div>
+      <div class="hint" style="text-align:center;margin-top:4px;">One Skrambeast, no healing, endless waves.</div>`;
+    document.getElementById('vcBack').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(panel); });
+    document.getElementById('vcNormalTraining').addEventListener('click', ()=>{ versusCategory='arena'; renderVersus(panel); });
+    document.getElementById('vcHive').addEventListener('click', ()=>{ versusCategory='hive'; renderVersus(panel); });
+    return;
+  }
   if(versusCategory==='arena'){
-    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">ARENA</div>${backRow}</div><div id="arenaBoostTimers" style="text-align:right;"></div><div id="arenaHost"></div>`;
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">BATTLE ARENA</div>${backRow}</div><div id="arenaBoostTimers" style="text-align:right;"></div><div id="arenaHost"></div>`;
     document.getElementById('vcBack').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(panel); });
     renderArena(document.getElementById('arenaHost'));
     return;
@@ -5816,8 +6242,13 @@ function renderVersus(panel){
     renderBossTraining(document.getElementById('bossHost'));
     return;
   }
+  if(versusCategory==='hive'){
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">THE HIVE</div></div><div id="hiveHost"></div>`;
+    renderHive(document.getElementById('hiveHost'));
+    return;
+  }
   if(versusCategory==='nearby'){
-    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">BATTLE BY CODE</div>${backRow}</div><div id="nearbyHost"></div>`;
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">PLAYER VS PLAYER</div>${backRow}</div><div id="nearbyHost"></div>`;
     document.getElementById('vcBack').addEventListener('click', ()=>{ stopNearbyPoll(); versusCategory='menu'; renderVersus(panel); });
     renderNearby(document.getElementById('nearbyHost'));
     return;
