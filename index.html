@@ -988,16 +988,9 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '2.5';
+const FIRMWARE_VERSION = '2.7';
 const FIRMWARE_CHANGELOG = [
-  'Fixed a real exploit: browsing Hive checkpoint items was inflating your stats every single click - now only counts once per checkpoint, as intended',
-  'Fixed: Hive run summary showed blank totals (white text on white background)',
-  'Removed the Hive\'s top Back button - it silently discarded runs with no warning. Exit Hive is now the only way out, with confirmation',
-  'Hive checkpoint: added icons and info pop-ups to every bonus, both buttons now Continue Battle / Exit Hive',
-  'New stat: Queens Beaten, separated from Legendary Opponents Beaten',
-  'Hive kill/HP display redesigned - smaller, moved under the title, no more oversized bubble',
-  'Moved the Wave Cleared continue button further from the Special Attack tap zone, with a settling delay to prevent accidental taps',
-  'Shortened the VS/Arena option descriptions and improved their spacing',
+  'Boss Training and Queen battles: Special Attack bar moved under the health bar, matching The Hive - tap circle is now properly centred',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1466,7 +1459,8 @@ function startBossBattle(){
   panelEl.innerHTML = `
     <div class="hp-bar-wrap" style="width:130px;margin:0 auto 4px;"><div class="hp-bar-fill" id="teamHpBar"></div></div>
     <div class="arena-roster" id="bossRoster"></div>
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:6px auto;"><div class="tap-center" id="bossTapZone"><div class="tap-countdown" id="bossCountdown"></div></div>${specialBarHTML('bossSpecial')}</div>
+    ${specialBarHTML('bossSpecial')}
+    <div style="display:flex;justify-content:center;margin:6px auto;"><div class="tap-center" id="bossTapZone"><div class="tap-countdown" id="bossCountdown"></div></div></div>
     <div class="battle-log-label">Battle Log${isMaxHitActive()?' <span style="color:#E8542E;">- MAX HITS ACTIVE</span>':''}</div>
     <div class="battle-log" id="bossBattleLog"></div>`;
   const bossBar=document.getElementById('bossHpBar'), teamBar=document.getElementById('teamHpBar');
@@ -1557,10 +1551,12 @@ function startBossBattle(){
 
   renderRoster(); updateBars();
   document.addEventListener('visibilitychange', onVisibilityChange);
+  battleCountdownActive = true;
   const steps=['3','2','1','TAP!']; let si=0;
   const showStep=()=>{
     if(si>=steps.length){
       countdownEl.textContent='';
+      battleCountdownActive = false;
       tapZone.addEventListener('click', onTap);
       autoFighterTimer = maybeStartAutoFighter(onTap);
       opponentTimer = setInterval(opponentTick, Math.max(550, opponentTickInterval(boss))); // Queens get a floor here - at level 120-150 the generic legendary formula alone would hit ~285ms, faster than is fair to react to no matter how strong the squad
@@ -1993,6 +1989,7 @@ function achievementsUnlockedCount(){
   return Object.values(state.achievementTierAwarded).reduce((s,t)=> s+(t>=0?t+1:0), 0);
 }
 let achievementPopupQueue = [];
+let battleCountdownActive = false; // true while any "3, 2, 1, TAP!" countdown is on screen - popups defer until it clears
 let achievementDoubleUsedThisBatch = false;
 function checkAchievements(){
   if(!state.achievementTierAwarded) state.achievementTierAwarded = {};
@@ -2021,6 +2018,7 @@ function checkAchievements(){
 }
 function showNextAchievementPopup(){
   if(achievementPopupQueue.length===0) return;
+  if(battleCountdownActive){ setTimeout(showNextAchievementPopup, 400); return; }
   const next = achievementPopupQueue[0];
   showAchievementPopup(next.cat, next.tierIdx, ()=>{
     achievementPopupQueue.shift();
@@ -2205,6 +2203,7 @@ function addHunterXP(amount){
   checkAchievements();
 }
 function showRankUpCelebration(rank){
+  if(battleCountdownActive){ setTimeout(()=> showRankUpCelebration(rank), 400); return; }
   const overlay = document.createElement('div');
   overlay.className='modal-overlay'; overlay.id='rankUpOverlay';
   overlay.innerHTML = `<div class="modal-box" style="max-width:300px;text-align:center;">
@@ -3470,7 +3469,7 @@ function opponentTickInterval(wild){
 // element IDs so wild encounters ('') and Arena ('A') can share this one implementation
 // while staying compatible with the existing finishEncounterBattle/finishArenaBattle.
 const SPECIAL_BAR_SEGMENTS = 6;
-const SPECIAL_BAR_HITS_PER_SEGMENT = 3;
+const SPECIAL_BAR_HITS_PER_SEGMENT = 1;
 function specialBarHTML(idPrefix){
   let segs = '';
   for(let i=0;i<SPECIAL_BAR_SEGMENTS;i++) segs += `<div class="special-bar-seg" id="${idPrefix}-seg-${i}"></div>`;
@@ -3693,11 +3692,15 @@ function startHiveRun(fighter, container){
       ${celebrationHTML(true,'WAVE CLEARED!')}
       <div class="hint" style="text-align:center;">+${xpGain} XP · +${formatCoins(coinGain)} coins${lootItem? ' · found '+lootItem.name+'!':''}</div>
       <div class="hint" style="text-align:center;margin-top:2px;">Kills: ${kills} · ${carriedHp}/${maxHp} HP (caught their breath - no full heal)</div>
-      <div class="buttons-row" style="margin-top:22px;"><button class="btn yolk small full" id="hiveWaveContinueBtn" disabled>${atCheckpoint? 'Continue to Checkpoint':'Continue'}</button></div>`;
+      <div class="buttons-row" style="margin-top:22px;"><button class="btn yolk small full" id="hiveWaveContinueBtn" disabled>${atCheckpoint? 'Continue to Checkpoint':'Next Opponent'}</button></div>
+      <div class="buttons-row"><button class="btn cream small full" id="hiveWaveReturnBtn">Return to Arena</button></div>`;
     const continueBtn = document.getElementById('hiveWaveContinueBtn');
     setTimeout(()=>{ if(continueBtn) continueBtn.disabled = false; }, 600); // settling delay - matches the same tap-momentum fix used for achievement pop-ups
     continueBtn.addEventListener('click', ()=>{
       if(atCheckpoint) showHiveCheckpoint(); else runNextWave();
+    });
+    document.getElementById('hiveWaveReturnBtn').addEventListener('click', ()=>{
+      showConfirm(`End this Hive run at ${kills} kills? Everything you've earned so far is already safely yours - this just ends your current streak.`, ()=> endHiveRun(true), {confirmLabel:'Yes, exit'});
     });
   }
   function showHiveCheckpoint(){
@@ -3873,11 +3876,13 @@ function runTapBattle(fighter, wild, targetEl, suffix, onComplete, skipTiredness
   }
 
   updateBars();
+  battleCountdownActive = true;
   const steps = ['3','2','1','TAP!'];
   let si=0;
   const showStep=()=>{
     if(si>=steps.length){
       countdownEl.textContent='';
+      battleCountdownActive = false;
       if(tired) addLog(`${fighter.name} is tired but answers the call.`);
       if(buff) addLog(`${fighter.name} feels a potion kick in.`);
       tapZone.addEventListener('click', onTap);
@@ -4140,6 +4145,7 @@ function releaseMonster(id){
 function closeDetailModal(overlay){
   if(overlay._boostTimerInterval) clearInterval(overlay._boostTimerInterval);
   overlay.remove();
+  document.body.style.overflow = '';
   void document.body.offsetHeight; // forces a clean repaint boundary before the next DOM rebuild - see comment on the reported static/interlace glitch
   const panel = document.getElementById('panel');
   if(currentTab==='collection' && squadSubView==='squad'){ renderSquadGrid(panel); }
@@ -4170,6 +4176,7 @@ function openDetailModal(m, editable, allowEquip){
       <div class="modal-actions" id="modalActions"></div>
     </div>`;
   document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
   let modalBoostTimer = null;
   if(m.favorite){
     const boostTimerEl = document.getElementById('modalBoostTimer');
@@ -4494,7 +4501,7 @@ function renderProfile(container, panel){
     : '<span class="hint">None yet</span>';
   container.innerHTML = `
     <div class="section-label">Hunter Profile</div>
-    <div class="log-row"><div class="log-info"><div class="log-name">${p.name}</div><div class="log-meta">Wins ${p.totalWins} · Fights ${p.totalFights} · Best streak ${p.bestStreak} · Discovered ${p.discovered} · K:D ${kd} · ${achievementsUnlockedCount()}/${ACHIEVEMENT_CATEGORIES.length*5} Achievements</div></div></div>
+    <div class="log-row"><div class="log-info"><div class="log-name">${p.name}</div><div class="log-meta">Wins ${p.totalWins} · Fights ${p.totalFights} · Best streak ${p.bestStreak} · Hive Streak: ${state.stats.hiveBestKillCount||0} · K:D ${kd} · ${achievementsUnlockedCount()}/${ACHIEVEMENT_CATEGORIES.length*5} Achievements</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Hunter Rank</div><div class="log-meta">Current Rank: ${rank.name}<br>${rankProgress}</div></div></div>
     <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
     <div class="log-row" id="highestBeastRow" style="${p.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${p.highest? p.highest.name+' - Lv.'+p.highest.level+' ('+RARITY_STYLE[p.highest.rarity].label+')'+(p.highest.level>=MAX_LEVEL_BY_RARITY[p.highest.rarity]?` ${iconTrophy(13,RARITY_STYLE[p.highest.rarity].color)}`:'') : '-'}</div></div></div>
@@ -5729,10 +5736,12 @@ function startNearbyDuelBattle(myTeam, opponentTeam, container, onFinish){
   }
   renderRosters(); updateBars();
   document.addEventListener('visibilitychange', onVisibilityChange);
+  battleCountdownActive = true;
   const steps=['3','2','1','TAP!']; let si=0;
   const showStep=()=>{
     if(si>=steps.length){
       countdownEl.textContent='';
+      battleCountdownActive = false;
       tapZone.addEventListener('click', onTap);
       autoFighterTimer = maybeStartAutoFighter(onTap);
       opponentTimer = setInterval(opponentTick, 2500);
@@ -5759,9 +5768,10 @@ function startBossTrainingBattle(boss, container){
     <div style="text-align:center;width:100%;">
       <div class="pixel sm" style="color:#a13a24;">${boss.name}</div>
       <div class="hp-bar-wrap" style="width:140px;margin:4px auto;"><div class="hp-bar-fill" id="btHpBar"></div></div>
+      ${specialBarHTML('btSpecial')}
       <div class="float" id="btFighterWrap" style="margin:4px auto;display:flex;justify-content:center;position:relative;">${monsterSVG(boss,90)}</div>
     </div>
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto;"><div class="tap-center" id="btTapZone"><div class="tap-countdown" id="btCountdown"></div></div>${specialBarHTML('btSpecial')}</div>
+    <div style="display:flex;justify-content:center;margin:8px auto;"><div class="tap-center" id="btTapZone"><div class="tap-countdown" id="btCountdown"></div></div></div>
     <div class="arena-roster" id="btRoster"></div>
     <div class="battle-log-label">Battle Log${isMaxHitActive()?' <span style="color:#E8542E;">- MAX HITS ACTIVE</span>':''}</div>
     <div class="battle-log" id="btBattleLog"></div>`;
@@ -5837,10 +5847,12 @@ function startBossTrainingBattle(boss, container){
   }
   renderRoster(); updateBars();
   document.addEventListener('visibilitychange', onVisibilityChange);
+  battleCountdownActive = true;
   const steps=['3','2','1','TAP!']; let si=0;
   const showStep=()=>{
     if(si>=steps.length){
       countdownEl.textContent='';
+      battleCountdownActive = false;
       tapZone.addEventListener('click', onTap);
       autoFighterTimer = maybeStartAutoFighter(onTap);
       opponentTimer = setInterval(opponentTick, Math.max(550, opponentTickInterval(boss))); // Queens get a floor here - at level 120-150 the generic legendary formula alone would hit ~285ms, faster than is fair to react to no matter how strong the squad
