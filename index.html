@@ -185,7 +185,8 @@
   .manual-row input{flex:1; min-width:0; border-radius:10px; border:2px solid #0d2027; padding:9px 10px; font-family:'Press Start 2P',monospace; font-size:10px; background:#fff; letter-spacing:1px;}
 
   .tabs{display:flex; gap:5px; margin-top:16px;}
-  .tab{flex:1; text-align:center; font-family:'Baloo 2',sans-serif; font-weight:700; font-size:10.5px; padding:8px 2px; border-radius:11px; cursor:pointer; background:#0d2027; color:var(--cream); border:2px solid transparent;}
+  .tab{flex:1; text-align:center; font-family:'Baloo 2',sans-serif; font-weight:700; font-size:10.5px; padding:8px 2px; border-radius:11px; cursor:pointer; background:#0d2027; color:var(--cream); border:2px solid transparent; position:relative;}
+  .tab-badge{position:absolute; top:-5px; right:-5px; min-width:15px; height:15px; padding:0 3px; border-radius:8px; background:#E8542E; color:#fff; font-family:'Baloo 2',sans-serif; font-weight:800; font-size:9px; align-items:center; justify-content:center; border:1.5px solid var(--cream); line-height:1;}
   .tab.active{background:var(--yolk); color:var(--ink); border-color:#0d2027;}
 
   .panel{margin-top:12px; background:var(--cream); border-radius:14px; padding:12px; min-height:180px; box-shadow:inset 0 2px 8px rgba(0,0,0,.15);}
@@ -423,10 +424,10 @@
   </div>
 
   <div class="tabs">
-    <div class="tab active" data-tab="scan">SCAN</div>
-    <div class="tab" data-tab="collection">SQUAD</div>
+    <div class="tab active" data-tab="scan">SCAN<span id="tabBadgeScan" class="tab-badge" style="display:none;"></span></div>
+    <div class="tab" data-tab="collection">SQUAD<span id="tabBadgeCollection" class="tab-badge" style="display:none;"></span></div>
     <div class="tab" data-tab="store">STORE</div>
-    <div class="tab" data-tab="almanac">LOG</div>
+    <div class="tab" data-tab="almanac">LOG<span id="tabBadgeAlmanac" class="tab-badge" style="display:none;"></span></div>
     <div class="tab" data-tab="versus">VS</div>
   </div>
 
@@ -469,6 +470,7 @@
 ========================================================= */
 function iconStar(filled){ return `<svg viewBox="0 0 24 24" width="11" height="11"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z" fill="${filled?'#F2C13D':'none'}" stroke="#1A1F1C" stroke-width="1.5"/></svg>`; }
 function iconClose(){ return `<svg viewBox="0 0 24 24" width="12" height="12"><line x1="4" y1="4" x2="20" y2="20" stroke="#1A1F1C" stroke-width="2.5"/><line x1="20" y1="4" x2="4" y2="20" stroke="#1A1F1C" stroke-width="2.5"/></svg>`; }
+function iconTick(){ return `<svg viewBox="0 0 24 24" width="13" height="13"><path d="M4 12.5l5.5 5.5L20 6" fill="none" stroke="#3f9142" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
 function iconChevron(dir){ const d = dir==='left' ? 'M15 4 L7 12 L15 20' : 'M9 4 L17 12 L9 20'; return `<svg viewBox="0 0 24 24" width="14" height="14"><path d="${d}" fill="none" stroke="#1A1F1C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
 function genericMonsterIcon(color, size){
   return `<svg viewBox="0 0 40 44" width="${size}" height="${size}">
@@ -538,6 +540,7 @@ function pvpSkullBadgeHTML(streak, size){
 }
 function iconPalette(){ return `<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 3a9 8 0 000 16c1.2 0 1.6-.7 1.6-1.4 0-.4-.2-.7-.4-1-.2-.3-.4-.6-.4-1 0-.8.6-1.4 1.4-1.4h1.6A4.8 4.8 0 0021 9.6C21 5.9 16.9 3 12 3z" fill="#fff" stroke="#1A1F1C" stroke-width="1.3"/><circle cx="7.5" cy="10.5" r="1.3" fill="#E8542E"/><circle cx="10.5" cy="7" r="1.3" fill="#4E8FD1"/><circle cx="15" cy="7.5" r="1.3" fill="#F2C13D"/><circle cx="17" cy="11.5" r="1.3" fill="#5CA85C"/></svg>`; }
 function iconTrophy(size, color){ const c=color||'#F2C13D'; return `<svg viewBox="0 0 24 24" width="${size||14}" height="${size||14}"><path d="M7 4h10v5a5 5 0 01-10 0z" fill="${c}" stroke="#1A1F1C" stroke-width="1.3"/><path d="M7 5H4a3 3 0 003 5M17 5h3a3 3 0 01-3 5" fill="none" stroke="#1A1F1C" stroke-width="1.3"/><rect x="10" y="14" width="4" height="4" fill="${c}" stroke="#1A1F1C" stroke-width="1.1"/><rect x="7" y="18" width="10" height="2.5" rx="1" fill="${c}" stroke="#1A1F1C" stroke-width="1.1"/></svg>`; }
+function iconClipboard(size){ const s=size||16; return `<svg viewBox="0 0 24 24" width="${s}" height="${s}"><rect x="5" y="4" width="14" height="17" rx="2" fill="#fff" stroke="#1A1F1C" stroke-width="1.4"/><rect x="9" y="2.5" width="6" height="3" rx="1" fill="#8FA998" stroke="#1A1F1C" stroke-width="1.2"/><path d="M8 10h8M8 13.5h8M8 17h5" stroke="#1A1F1C" stroke-width="1.3" stroke-linecap="round"/></svg>`; }
 function achievementIcon(key){
   switch(key){
     case 'discoverer': return `<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="10" cy="10" r="6" fill="none" stroke="#fff" stroke-width="2.2"/><line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>`;
@@ -889,6 +892,8 @@ async function loadState(){
   checkEasterEgg2StepD();
   document.body.classList.toggle('egg3-bt-done', easterEggStepDone('egg3','a'));
   renderTab();
+  refreshTabBadges();
+  setInterval(refreshTabBadges, 15000);
   maybeShowOnboarding();
   checkDailyLogin();
   if('serviceWorker' in navigator){
@@ -941,6 +946,7 @@ function setupEasterEgg2Triggers(){
   });
 }
 async function saveState(){
+  refreshTabBadges();
   try{ await storageSet('skrambeasts-state', JSON.stringify(state), false); }
   catch(e){ console.warn('save failed', e); }
 }
@@ -1020,9 +1026,11 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '5.2';
+const FIRMWARE_VERSION = '5.7';
 const FIRMWARE_CHANGELOG = [
-  'Internal rename: the save file itself moved from the old scannimals-state key to skrambeasts-state - existing saves migrate over automatically on first load, nothing lost',
+  'Performance pass: fixed two real background timer leaks (the duel Back button, and the animated scanner skin continuing to redraw invisibly after leaving the Scan tab)',
+  'Squad Analysis now caches its result and only recomputes when your squad actually changes, instead of on every single save',
+  'The Journal now only rebuilds its tile grid when turning pages, instead of rebuilding the whole screen including the filter buttons',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -2145,6 +2153,9 @@ let achievementsPage = 0;
 const ACHIEVEMENTS_PAGE_SIZE = 5;
 function renderQuests(container){
   ensureDailyQuests();
+  let anyNewlySeen = false;
+  state.dailyQuests.quests.forEach(q=>{ if((q.completed||q.skipped) && !q.seen){ q.seen=true; anyNewlySeen=true; } });
+  if(anyNewlySeen){ saveState(); }
   const rows = state.dailyQuests.quests.map((q, idx)=>{
     const t = questTemplateFor(q);
     const diff = QUEST_DIFFICULTY.find(d=>d.key===q.difficulty);
@@ -2654,6 +2665,125 @@ function restRemainingLabel(m){
   return Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0');
 }
 function favoritedSquad(){ return state.collection.filter(m=>m.favorite); }
+let _squadAnalysisCache = null, _squadAnalysisCacheSig = null;
+function computeSquadAnalysis(){
+  const squad = favoritedSquad();
+  const sig = squad.map(m=>`${m.id}:${m.level}:${m.weapon||''}:${m.armor||''}:${m.shield||''}`).join('|') + '#' + JSON.stringify(state.squadAnalysisDismissed||{});
+  if(_squadAnalysisCache && _squadAnalysisCacheSig===sig) return _squadAnalysisCache;
+  const result = computeSquadAnalysisUncached(squad);
+  _squadAnalysisCache = result; _squadAnalysisCacheSig = sig;
+  return result;
+}
+function computeSquadAnalysisUncached(squad){
+  if(squad.length===0) return {issues:[], benchSuggestion:null, empty:true};
+  const dismissed = state.squadAnalysisDismissed || {};
+  const issues = [];
+  const typeCounts = {};
+  squad.forEach(m=> typeCounts[m.type] = (typeCounts[m.type]||0)+1);
+  const dominantType = Object.keys(typeCounts).reduce((a,b)=> typeCounts[b]>typeCounts[a]?b:a, squad[0].type);
+  const counterType = Object.keys(TYPE_ADVANTAGE).find(k=>TYPE_ADVANTAGE[k]===dominantType);
+  let typeIssue = null;
+  if(typeCounts[dominantType]>=3 && !squad.some(m=>m.type===counterType)){
+    typeIssue = {
+      id:`type:${dominantType}:${counterType}`, kind:'type', priority:2,
+      headline:`Heavy on ${TYPES.find(t=>t.key===dominantType).label}`,
+      detail:`${typeCounts[dominantType]} of your 5 share a type, and nothing in your squad covers ${TYPES.find(t=>t.key===counterType).label}, which beats it.`,
+      color: TYPES.find(t=>t.key===dominantType).color
+    };
+    issues.push(typeIssue);
+  }
+  squad.forEach(m=>{
+    if(!m.weapon && !m.armor && !m.shield){
+      issues.push({
+        id:`gear:${m.id}`, kind:'gear', priority:3,
+        headline:`${m.name} is unequipped`,
+        detail:`No weapon, armour, or shield, while the rest of your squad is geared up.`,
+        color:'#8FA998'
+      });
+    }
+  });
+  let weakLinkIssue = null;
+  if(squad.length>1){
+    const topLevel = Math.max(...squad.map(m=>m.level));
+    const weakLink = squad.filter(m=> m.level < topLevel*0.7).sort((a,b)=>a.level-b.level)[0];
+    if(weakLink){
+      weakLinkIssue = {
+        id:`weakLink:${weakLink.id}`, kind:'weakLink', priority:1,
+        headline:`${weakLink.name} is far behind`,
+        detail:`Level ${weakLink.level}, well under your squad's top level of ${topLevel}. Likely to faint first in multi-fighter battles.`,
+        color:'#a13a24',
+        monster: weakLink
+      };
+      issues.push(weakLinkIssue);
+    }
+  }
+  const totalPower = squad.reduce((s,m)=> s+effectiveStats(m).power, 0);
+  const totalGuard = squad.reduce((s,m)=> s+effectiveStats(m).guard, 0);
+  if(totalPower>0 && totalGuard>0){
+    const ratio = totalPower/totalGuard;
+    if(ratio>=1.4) issues.push({id:'lean:offence', kind:'lean', priority:4, headline:'Offence-heavy squad', detail:'Your squad leans heavily offensive overall - could be intentional.', color:'#E8542E'});
+    else if(ratio<=1/1.4) issues.push({id:'lean:defence', kind:'lean', priority:4, headline:'Defence-heavy squad', detail:'Your squad leans heavily defensive overall - could be intentional.', color:'#4E8FD1'});
+  }
+  const undismissed = issues.filter(i=> !dismissed[i.id]);
+  undismissed.sort((a,b)=>a.priority-b.priority);
+  const topIssues = undismissed.slice(0,3);
+  let benchSuggestion = null;
+  const bench = state.collection.filter(m=>!m.favorite);
+  if(weakLinkIssue && topIssues.includes(weakLinkIssue)){
+    const better = bench.filter(m=>m.level>weakLinkIssue.monster.level).sort((a,b)=>b.level-a.level)[0];
+    if(better) benchSuggestion = {monster:better, reason:`Higher level than ${weakLinkIssue.monster.name}`};
+  } else if(typeIssue && topIssues.includes(typeIssue)){
+    const coverMon = bench.filter(m=>m.type===counterType).sort((a,b)=>b.level-a.level)[0];
+    if(coverMon) benchSuggestion = {monster:coverMon, reason:`Covers the missing ${TYPES.find(t=>t.key===counterType).label} type`};
+  }
+  return {issues:topIssues, benchSuggestion, empty:false};
+}
+function dismissSquadIssue(id){
+  if(!state.squadAnalysisDismissed) state.squadAnalysisDismissed = {};
+  state.squadAnalysisDismissed[id] = true;
+  saveState();
+}
+function showSquadAnalysisPanel(){
+  document.querySelectorAll('.modal-overlay').forEach(el=>{
+    if(el._boostTimerInterval) clearInterval(el._boostTimerInterval);
+    el.remove();
+  });
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  function renderBody(){
+    const result = computeSquadAnalysis();
+    let bodyHTML;
+    if(result.empty){
+      bodyHTML = `<div class="hint" style="text-align:center;padding:10px 0;">Favourite up to 5 Skrambeasts to get an analysis of your squad.</div>`;
+    } else if(result.issues.length===0){
+      bodyHTML = `<div class="hint" style="text-align:center;padding:10px 0;"><b style="color:#3f9142;">Your squad looks solid.</b><br>No coverage gaps, gear gaps, or level mismatches found.</div>`;
+    } else {
+      bodyHTML = result.issues.map(issue=> `
+        <div class="log-row" data-issue-row="${issue.id}" style="cursor:default;"><div class="log-info"><div class="log-name" style="color:${issue.color};">${escapeHtml(issue.headline)}</div><div class="log-meta">${escapeHtml(issue.detail)}</div></div><button class="btn tiny cream" data-tick="${issue.id}" title="Dismiss this suggestion" style="flex-shrink:0;">${iconTick()}</button></div>`).join('');
+      if(result.benchSuggestion){
+        bodyHTML += `<div class="pixel sm" style="margin-top:8px;">Worth benching in</div>
+          <div class="log-row" id="sqAnalysisBenchRow" style="cursor:pointer;"><div style="width:26px;height:26px;">${monsterSVG(result.benchSuggestion.monster,26)}</div><div class="log-info"><div class="log-name">${escapeHtml(result.benchSuggestion.monster.name)}</div><div class="log-meta">${escapeHtml(result.benchSuggestion.reason)}</div></div></div>`;
+      }
+    }
+    overlay.innerHTML = `<div class="modal-box" style="max-width:320px;">
+      <button class="btn tiny cream" id="sqAnalysisClose" style="position:absolute;top:10px;right:10px;">${iconClose()}</button>
+      <div class="pixel md" style="text-align:center;">Squad Analysis</div>
+      <div style="margin-top:8px;">${bodyHTML}</div>
+    </div>`;
+    overlay.querySelector('#sqAnalysisClose').addEventListener('click', ()=> overlay.remove());
+    overlay.querySelectorAll('[data-tick]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        dismissSquadIssue(btn.dataset.tick);
+        renderBody();
+      });
+    });
+    const benchRow = overlay.querySelector('#sqAnalysisBenchRow');
+    if(benchRow && result.benchSuggestion) benchRow.addEventListener('click', ()=>{ openDetailModal(result.benchSuggestion.monster, true); });
+  }
+  renderBody();
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+}
 function playerHasAnyCrown(){
   if((state.inventory.queensCrown||0) > 0) return true;
   return state.collection.some(m=> m.costume==='queensCrown');
@@ -4147,9 +4277,24 @@ function finishEncounterBattle(fighter, wild, won, leveled, isCaptureFlow, oneHi
 document.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=> switchTab(t.dataset.tab)));
 let bossBattleLocked = false;
 let wildBattleLocked = false;
+function refreshTabBadges(){
+  const eggReadyCount = Math.min(5, (state.eggs||[]).filter(e=> Date.now()>=e.readyAt).length);
+  const questBadgeCount = Math.min(3, (state.dailyQuests? state.dailyQuests.quests : []).filter(q=> (q.completed||q.skipped) && !q.seen).length);
+  const squadIssueCount = computeSquadAnalysis().issues.length; // already filtered for dismissed issues and capped at 3
+  const setBadge = (id, count)=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(count>0){ el.textContent = count; el.style.display = 'flex'; }
+    else { el.style.display = 'none'; }
+  };
+  setBadge('tabBadgeScan', eggReadyCount);
+  setBadge('tabBadgeCollection', squadIssueCount);
+  setBadge('tabBadgeAlmanac', questBadgeCount);
+  setBadge('squadAnalysisBadge', squadIssueCount);
+}
 function switchTab(name){
   if(scannerSetupActive) return; // dummy screen during Scanner Setup - genuinely inert, not just visually blank
-  if(bossBattleLocked && name!=='scan'){ showToast("You can't leave until the Queen fight is over!"); return; }
+  if(bossBattleLocked && name!=='scan'){ showToast("You can't leave until the fight is over!"); return; }
   if(wildBattleLocked && name!=='scan'){ showToast("Finish the fight before switching tabs!"); return; }
   if(nearbyDuelInProgress && name!=='versus'){ showToast("Finish the fight before switching tabs!"); return; }
   if(hiveRunActive && name!=='versus'){ showToast("Finish or exit your Hive run before switching tabs!"); return; }
@@ -4161,6 +4306,7 @@ function switchTab(name){
   if(name!=='scan'){
     const wasCapturing = !!cameraStream;
     stopCamera();
+    stopNoise();
     if(wasCapturing) idleScreen(); // avoid a dead frozen video frame if they come back
   }
   clearInterval(squadTickTimer);
@@ -4225,10 +4371,15 @@ function renderCollection(panel){
   const cap = squadCapacity();
   const buyRow = squadFull() ? `<div class="buttons-row"><button class="btn yolk small full" id="buySquadPageBtn">Buy Squad Space - ${formatCoins(squadSpaceCost(squadPagesOwned()+1))} coins</button></div>` : '';
   panel.innerHTML = `
+    <div class="buttons-row" style="margin-top:0;justify-content:flex-end;"><button class="btn tiny cream" id="squadAnalysisBtn" style="position:relative;display:flex;align-items:center;gap:4px;">${iconClipboard(14)} Analysis<span id="squadAnalysisBadge" class="tab-badge" style="display:none;"></span></button></div>
     <div class="buttons-row" style="margin-top:0;flex-wrap:wrap;justify-content:center;gap:3px;">${filterBtns}</div>
     ${buyRow}
     <div class="page-bar" style="margin-top:4px;"><button class="btn tiny cream" id="squadPrev" ${squadPage===0?'disabled':''}>${iconChevron('left')}</button><span class="pixel sm">${squadPage+1}/${totalPages}</span><button class="btn tiny cream" id="squadNext" ${squadPage>=totalPages-1?'disabled':''}>${iconChevron('right')}</button></div>
     <div class="tile-grid" id="squadGrid"></div>`;
+  document.getElementById('squadAnalysisBtn').addEventListener('click', showSquadAnalysisPanel);
+  const sqBadge = document.getElementById('squadAnalysisBadge');
+  const sqIssueCount = computeSquadAnalysis().issues.length;
+  if(sqIssueCount>0){ sqBadge.textContent = sqIssueCount; sqBadge.style.display = 'flex'; }
   panel.querySelectorAll('[data-sfilter]').forEach(b=> b.addEventListener('click', ()=>{ squadFilter = squadFilter===b.dataset.sfilter ? 'all' : b.dataset.sfilter; squadPage=0; renderCollection(panel); }));
   if(squadFull()) document.getElementById('buySquadPageBtn').addEventListener('click', ()=> buySquadPage(()=> renderCollection(panel)));
   renderSquadGrid(panel);
@@ -5098,11 +5249,6 @@ function renderTips(container){
   }
 }
 function renderEncyclopedia(container){
-  const entries = Object.values(state.almanac).filter(e=>{
-    if(encyclopediaFilter==='all') return true;
-    if(encyclopediaFilter==='boss') return !!e.isBoss;
-    return e.rarity===encyclopediaFilter && !e.isBoss;
-  }).sort((a,b)=>b.timestamp-a.timestamp);
   const filterKeys = ['all',...RARITY_ORDER,'boss'];
   const filterLabel = r=> r==='all'?'ALL':r==='boss'?'QUEENS':SQUAD_FILTER_LABEL[r].toUpperCase();
   const filterBtn = r=> `<button class="btn tiny ${encyclopediaFilter===r?'yolk':'cream'}" style="padding:3px 6px;font-size:9px;" data-filter="${r}">${filterLabel(r)}</button>`;
@@ -5114,10 +5260,20 @@ function renderEncyclopedia(container){
     <div class="page-bar" id="encPageBar" style="margin-top:6px;"></div>
     <div class="tile-grid" id="encGrid" style="margin-top:8px;"></div>`;
   container.querySelectorAll('[data-filter]').forEach(b=> b.addEventListener('click', ()=>{ encyclopediaFilter=b.dataset.filter; encyclopediaPage=0; renderEncyclopedia(container); }));
+  renderEncyclopediaGrid(container);
+}
+function renderEncyclopediaGrid(container){
+  const entries = Object.values(state.almanac).filter(e=>{
+    if(encyclopediaFilter==='all') return true;
+    if(encyclopediaFilter==='boss') return !!e.isBoss;
+    return e.rarity===encyclopediaFilter && !e.isBoss;
+  }).sort((a,b)=>b.timestamp-a.timestamp);
   const totalPages = Math.max(1, Math.ceil(Math.max(entries.length, ENCYCLOPEDIA_PAGE_SIZE)/ENCYCLOPEDIA_PAGE_SIZE));
   encyclopediaPage = Math.min(encyclopediaPage, totalPages-1);
   const pageItems = entries.slice(encyclopediaPage*ENCYCLOPEDIA_PAGE_SIZE, encyclopediaPage*ENCYCLOPEDIA_PAGE_SIZE+ENCYCLOPEDIA_PAGE_SIZE);
   const grid = document.getElementById('encGrid');
+  if(!grid) return;
+  grid.innerHTML = '';
   for(let i=0;i<ENCYCLOPEDIA_PAGE_SIZE;i++){
     const e = pageItems[i];
     const tile = document.createElement('div');
@@ -5137,9 +5293,11 @@ function renderEncyclopedia(container){
     grid.appendChild(tile);
   }
   void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
-  document.getElementById('encPageBar').innerHTML = `<button class="btn tiny cream" id="encPrev" ${encyclopediaPage===0?'disabled':''}>${iconChevron('left')}</button><span class="pixel sm">${encyclopediaPage+1}/${totalPages}</span><button class="btn tiny cream" id="encNext" ${encyclopediaPage>=totalPages-1?'disabled':''}>${iconChevron('right')}</button>`;
-  document.getElementById('encPrev').addEventListener('click', ()=>{ if(encyclopediaPage===0) return; encyclopediaPage=Math.max(0,encyclopediaPage-1); renderEncyclopedia(container); });
-  document.getElementById('encNext').addEventListener('click', ()=>{ if(encyclopediaPage>=totalPages-1) return; encyclopediaPage=Math.min(totalPages-1,encyclopediaPage+1); renderEncyclopedia(container); });
+  const pageBar = document.getElementById('encPageBar');
+  if(!pageBar) return;
+  pageBar.innerHTML = `<button class="btn tiny cream" id="encPrev" ${encyclopediaPage===0?'disabled':''}>${iconChevron('left')}</button><span class="pixel sm">${encyclopediaPage+1}/${totalPages}</span><button class="btn tiny cream" id="encNext" ${encyclopediaPage>=totalPages-1?'disabled':''}>${iconChevron('right')}</button>`;
+  document.getElementById('encPrev').addEventListener('click', ()=>{ if(encyclopediaPage===0) return; encyclopediaPage=Math.max(0,encyclopediaPage-1); renderEncyclopediaGrid(container); });
+  document.getElementById('encNext').addEventListener('click', ()=>{ if(encyclopediaPage>=totalPages-1) return; encyclopediaPage=Math.min(totalPages-1,encyclopediaPage+1); renderEncyclopediaGrid(container); });
 }
 function formatPlayTime(ms){
   const totalMin = Math.floor(ms/60000);
@@ -6495,7 +6653,10 @@ function renderVersus(panel){
   }
   if(versusCategory==='nearby'){
     panel.innerHTML = `<div class="top-bar"><div class="pixel sm">PLAYER VS PLAYER</div>${backRow}</div><div id="nearbyHost"></div>`;
-    document.getElementById('vcBack').addEventListener('click', ()=>{ stopNearbyPoll(); versusCategory='menu'; renderVersus(panel); });
+    document.getElementById('vcBack').addEventListener('click', ()=>{
+      if(nearbyDuelInProgress){ showToast("Finish the fight before leaving!"); return; }
+      stopNearbyPoll(); versusCategory='menu'; renderVersus(panel);
+    });
     renderNearby(document.getElementById('nearbyHost'));
     return;
   }
