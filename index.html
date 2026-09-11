@@ -1054,9 +1054,11 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '6.0';
+const FIRMWARE_VERSION = '6.3';
 const FIRMWARE_CHANGELOG = [
-  'Player VS Player duels now detect a genuine opponent disconnect - if they go silent for 25 seconds after both sides are ready, you get a clear "opponent seems to have disconnected" message and a clean way to leave, instead of an indefinite, uninformative wait',
+  'Trading has been fully redesigned: "Trade" now asks whether you want a friend or someone new, then sends them a direct invite by username - no more manually sharing a random code',
+  'Accepting an invite drops you straight into the trade/battle screen together, exactly like an accepted duel request already does',
+  'Unanswered invites time out after 5 minutes, matching how duel requests already behave',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -3018,7 +3020,7 @@ function showSettingsModal(){
     ${toggleRow('autoFighter','Auto Fighter','Auto-battles at a steady pace')}
     <div class="section-label" style="margin-top:10px;">Hunter Username</div>
     <div class="hint">Letters and numbers only - no spaces or symbols. 3-15 characters.</div>
-    <div class="manual-row" style="margin-top:4px;"><input id="settingsUsernameInput" placeholder="${escapeHtml(state.hunterCode||'')}" maxlength="15" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px;box-sizing:border-box;font-size:12px;"><button class="btn tiny yolk" id="settingsUsernameSetBtn">Set</button></div>
+    <div class="manual-row" style="margin-top:4px;"><input id="settingsUsernameInput" placeholder="${escapeHtml(state.hunterName||'')}" maxlength="15" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px;box-sizing:border-box;font-size:12px;"><button class="btn tiny yolk" id="settingsUsernameSetBtn">Set</button></div>
     <div class="buttons-row" style="margin-top:8px;"><button class="btn-hazard small full" style="padding:6px 8px;" id="settingsResetBtn"><span class="hazard-label">Reset Progress</span></button></div>
     <div class="buttons-row" style="margin-top:6px;"><button class="btn cream small full" style="padding:6px 8px;" id="settingsCustomizeBtn">Customize Scanner</button></div>
     <div class="buttons-row" style="margin-top:6px;"><button class="btn yolk small full" style="padding:6px 8px;" id="settingsExportBtn">Export Save Code</button></div>
@@ -3030,7 +3032,7 @@ function showSettingsModal(){
     const result = await changeUsername(document.getElementById('settingsUsernameInput').value);
     showToast(result.message);
     if(result.ok) document.getElementById('settingsUsernameInput').value = '';
-    document.getElementById('settingsUsernameInput').placeholder = state.hunterCode||'';
+    document.getElementById('settingsUsernameInput').placeholder = state.hunterName||'';
   });
   overlay.querySelectorAll('[data-setting]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -4724,32 +4726,23 @@ function copyText(text, okMsg, failMsg){
 
 /* ---- FRIENDS (lightweight - no real backend, uses the same shared-code storage Nearby relies on) ---- */
 // The ONE place identity is allowed to change. Every UI that lets a player set/change their
-// username must call this - never assign state.hunterCode / state.hunterName directly anywhere
-// else. This is what keeps the two fields in sync and the Firebase username index correct;
-// a prior bug let the Nearby pairing screen bypass all of this and directly set hunterName only,
-// which desynced it from hunterCode and silently broke the uniqueness index for that player.
+// username must call this - never assign state.hunterName directly anywhere else. This is what
+// keeps the Firebase username index correct; a prior bug let both the onboarding screen and the
+// Nearby pairing screen bypass this entirely, silently breaking uniqueness for those players.
 async function changeUsername(rawDesired){
   const desired = String(rawDesired||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(!desired || desired.length<3) return {ok:false, message:"Username needs at least 3 letters/numbers, no spaces or symbols"};
   if(desired.length>15) return {ok:false, message:"Username needs to be 15 characters or fewer"};
-  if(desired===state.hunterCode) return {ok:false, message:"That's already your username!"};
+  if(desired===state.hunterName) return {ok:false, message:"That's already your username!"};
   if(isProfane(desired)) return {ok:false, message:"Please choose a different username"};
   try{
     const existingId = await resolveUsernameToPlayerId(desired);
     if(existingId && existingId!==state.playerId) return {ok:false, message:"This hunter name is taken - try another"};
   }catch(e){ /* not found is expected and means it's available */ }
-  state.hunterCode = desired;
   state.hunterName = desired;
   saveState();
   await publishHunterProfile();
   return {ok:true, message:`Username set to ${desired}!`};
-}
-function ensureHunterCode(){
-  if(!state.hunterCode){
-    state.hunterCode = (state.hunterName||'HUNTER').slice(0,10).toUpperCase()+'-'+Math.floor(1000+Math.random()*9000);
-    saveState();
-  }
-  return state.hunterCode;
 }
 // A permanent internal identity, separate from the player's chosen username - this never changes,
 // so friend connections survive username changes instead of breaking (the old hunter:<username> key
@@ -4761,8 +4754,6 @@ function ensurePlayerId(){
   }
   return state.playerId;
 }
-// Resolves a typed username to the stable player ID behind it, via the username:<name> index -
-// returns null if nobody has published under that username.
 async function sendFriendRequest(targetId, targetName){
   const myId = ensurePlayerId();
   const entry = { senderId: myId, senderName: state.hunterName||'Hunter', timestamp: Date.now() };
@@ -4852,6 +4843,10 @@ async function checkFriendAcceptedMarkers(){
   if(anyUpgraded){ saveState(); checkAchievements(); }
   return anyUpgraded;
 }
+// Resolves a typed username to the stable player ID behind it, via the username:<name> index -
+// returns null if nobody has published under that username. The username is now just hunterName
+// itself (the old separate, auto-generated hunterCode has been retired) - what's shown on the
+// leaderboard is exactly what resolves here, no hidden second identifier involved.
 async function resolveUsernameToPlayerId(username){
   try{
     const res = await storageGet('username:'+username, true);
@@ -4886,18 +4881,28 @@ function myPublicProfile(){
   };
 }
 async function publishHunterProfile(){
+  if(!state.hunterName) return; // hasn't set a name yet (shouldn't happen post-onboarding, but nothing to publish under if so)
   const playerId = ensurePlayerId();
-  const code = ensureHunterCode();
+  const name = state.hunterName;
   const profile = myPublicProfile();
   saveState(); // myPublicProfile may have just rolled the daily/weekly XP baseline forward - persist that
   try{ await storageSet('hunter:'+playerId, JSON.stringify(profile), true); }catch(e){}
-  if(state.lastPublishedUsername !== code){
+  if(state.lastPublishedUsername !== name){
+    try{
+      const existingId = await resolveUsernameToPlayerId(name);
+      if(existingId && existingId!==playerId){
+        // a genuine collision from before uniqueness was enforced everywhere - don't steal their claim
+        state.needsRename = true; saveState();
+        return;
+      }
+    }catch(e){}
+    state.needsRename = false;
     if(state.lastPublishedUsername){
       try{ await storageDelete('username:'+state.lastPublishedUsername, true); }catch(e){ /* best-effort - a stale index entry just means that old name won't resolve, no data loss */ }
     }
     try{
-      await storageSet('username:'+code, JSON.stringify({playerId}), true);
-      state.lastPublishedUsername = code;
+      await storageSet('username:'+name, JSON.stringify({playerId}), true);
+      state.lastPublishedUsername = name;
       saveState();
     }catch(e){}
   }
@@ -4975,9 +4980,10 @@ let globalPage = 0;
 const GLOBAL_PAGE_SIZE = 10;
 const GLOBAL_MAX_ROWS = 100;
 function renderFriendsList(container){
-  const code = ensureHunterCode();
+  const code = state.hunterName||'';
   publishHunterProfile();
   const localWarning = !HAS_SHARED_BACKEND ? `<div class="hint" style="color:#a13a24;margin:8px 0;">No shared server is set up yet, so Friends and the Leaderboard can't find anyone on this build.</div>` : '';
+  const renameWarning = state.needsRename ? `<div class="hint" style="color:#a13a24;margin:8px 0;">Someone already has the username "${escapeHtml(code)}". Pick a new one in Settings so friends and battles can find you.</div>` : '';
   const isGlobal = friendsBoardMode==='global';
   container.innerHTML = `
     <div class="buttons-row" style="margin-top:0;gap:4px;">
@@ -4985,6 +4991,7 @@ function renderFriendsList(container){
       <button class="btn tiny ${friendsBoardMode==='global'?'yolk':'cream'}" style="padding:3px 5px;font-size:9px;" data-board="global">Global</button>
     </div>
     ${localWarning}
+    ${renameWarning}
     ${isGlobal ? `
     <div class="section-label" style="margin-top:6px;">Leaderboard</div>
     <div class="buttons-row" style="margin-top:0;gap:4px;">
@@ -5169,10 +5176,32 @@ function showFriendSnapshot(friendPlayerId, pr){
       <div class="log-row" id="fsHighestRow" style="${pr.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${pr.highest? pr.highest.name+' - Lv.'+pr.highest.level+' ('+(pr.highest.isBoss?'Queen':RARITY_STYLE[pr.highest.rarity].label)+')' : '-'}</div></div></div>
       <div class="pixel sm" style="margin-top:8px;">Squad</div>
       <div class="arena-roster" id="fsSquadRoster" style="margin-top:4px;"></div>
-      ${friendPlayerId===ensurePlayerId() ? `<div class="hint" style="text-align:center;margin-top:12px;">This is you!</div>` : `<div class="buttons-row" style="margin-top:12px;"><button class="btn coral small full" id="fsBattleReq">Send Battle Request</button></div>`}
+      ${friendPlayerId===ensurePlayerId() ? `<div class="hint" style="text-align:center;margin-top:12px;">This is you!</div>` : `
+        <div class="buttons-row" style="margin-top:12px;"><button class="btn coral small full" id="fsBattleReq">Send Battle Request</button></div>
+        <div class="buttons-row" id="fsAddFriendRow"></div>`}
     </div>`;
   document.body.appendChild(overlay);
   document.getElementById('fsClose').addEventListener('click', ()=> overlay.remove());
+  const addFriendRow = document.getElementById('fsAddFriendRow');
+  if(addFriendRow){
+    const existing = friendPlayerId ? (state.friends||[]).find(f=>f.playerId===friendPlayerId) : null;
+    if(existing && existing.status!=='pending'){
+      addFriendRow.innerHTML = `<div class="hint" style="text-align:center;width:100%;">Already friends</div>`;
+    } else if(existing && existing.status==='pending'){
+      addFriendRow.innerHTML = `<div class="hint" style="text-align:center;width:100%;">Friend request sent</div>`;
+    } else {
+      addFriendRow.innerHTML = `<button class="btn yolk small full" id="fsAddFriendBtn">Add Friend</button>`;
+      document.getElementById('fsAddFriendBtn').addEventListener('click', async ()=>{
+        if(!friendPlayerId){ showToast("Can't reach this hunter right now"); return; }
+        const sent = await sendFriendRequest(friendPlayerId, pr.name);
+        if(!sent){ showToast("Couldn't reach that hunter right now"); return; }
+        if(!state.friends) state.friends=[];
+        state.friends.push({playerId:friendPlayerId, status:'pending'}); saveState();
+        showToast("Friend request sent!");
+        addFriendRow.innerHTML = `<div class="hint" style="text-align:center;width:100%;">Friend request sent</div>`;
+      });
+    }
+  }
   const highestRow = document.getElementById('fsHighestRow');
   if(highestRow && pr.highest) highestRow.addEventListener('click', ()=> openDetailModal(pr.highest, false, false));
   const squadRoster = document.getElementById('fsSquadRoster');
@@ -6668,6 +6697,7 @@ function renderVersus(panel){
   if(versusCategory==='menu'){
     panel.innerHTML = `
       <div id="incomingBattleRequestSlot"></div>
+      <div id="incomingTradeInviteSlot"></div>
       <div class="section-label">Choose how to play</div>
       <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#4E8FD1',52)}</div><div class="vs-center"><span id="easterEgg3BtIcon" class="vs-badge" style="cursor:pointer;">VS</span></div><div class="vs-side">${genericMonsterIcon('#E8542E',52)}</div></div>
       <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcNearby">Player VS Player</button></div>
@@ -6692,6 +6722,23 @@ function renderVersus(panel){
       });
       document.getElementById('battleReqDecline').addEventListener('click', async ()=>{
         await declineBattleRequest();
+        slot.innerHTML = '';
+      });
+    });
+    checkIncomingTradeInvite().then(req=>{
+      if(!req) return;
+      const slot = document.getElementById('incomingTradeInviteSlot');
+      if(!slot) return; // player navigated elsewhere while this was checking
+      slot.innerHTML = `<div class="log-row" style="background:#D4A017;flex-direction:column;align-items:stretch;gap:6px;">
+        <div class="pixel sm" style="text-align:center;">${escapeHtml(req.fromName)} wants to trade!</div>
+        <div class="buttons-row" style="margin-top:0;"><button class="btn coral small" id="tradeInviteAccept">Accept</button><button class="btn cream small" id="tradeInviteDecline">Decline</button></div>
+      </div>`;
+      document.getElementById('tradeInviteAccept').addEventListener('click', async ()=>{
+        await acceptTradeInvite(req);
+        enterTradeSession(req.sessionCode, panel);
+      });
+      document.getElementById('tradeInviteDecline').addEventListener('click', async ()=>{
+        await declineTradeInvite();
         slot.innerHTML = '';
       });
     });
@@ -6738,11 +6785,63 @@ function renderVersus(panel){
       <div class="buttons-row"><button class="btn coral small full vs-menu-btn" id="vcLineup">Line Up</button></div>
       <div class="hint" style="text-align:center;margin-top:4px;">See who's around right now and challenge them instantly.</div>
       <div class="vs-illustration"><div class="vs-side">${genericMonsterIcon('#8FA998',52)}</div><div class="vs-center"><span class="vs-badge">VS</span></div><div class="vs-side">${genericMonsterIcon('#F77F00',52)}</div></div>
-      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcPairCode">Pair by Code</button></div>
-      <div class="hint" style="text-align:center;margin-top:4px;">Trade, or battle someone specific using a shared code.</div>`;
+      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="vcPairCode">Trade</button></div>
+      <div class="hint" style="text-align:center;margin-top:4px;">Trade with a friend or someone specific by username.</div>`;
     document.getElementById('vcBack').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(panel); });
     document.getElementById('vcLineup').addEventListener('click', ()=>{ versusCategory='lineup'; renderVersus(panel); });
-    document.getElementById('vcPairCode').addEventListener('click', ()=>{ versusCategory='nearby'; renderVersus(panel); });
+    document.getElementById('vcPairCode').addEventListener('click', ()=>{ versusCategory='tradeChoice'; renderVersus(panel); });
+    return;
+  }
+  if(versusCategory==='tradeChoice'){
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">TRADE</div>${backRow}</div>
+      <div class="section-label" style="margin-top:6px;">Who do you want to trade with?</div>
+      <div class="buttons-row"><button class="btn coral small full vs-menu-btn" id="tcFriend">A Friend</button></div>
+      <div class="hint" style="text-align:center;margin-top:4px;">Pick from hunters you're already friends with.</div>
+      <div class="buttons-row"><button class="btn yolk small full vs-menu-btn" id="tcStranger">Someone New</button></div>
+      <div class="hint" style="text-align:center;margin-top:4px;">Enter their exact Hunter Username.</div>`;
+    document.getElementById('vcBack').addEventListener('click', ()=>{ versusCategory='pvpChoice'; renderVersus(panel); });
+    document.getElementById('tcFriend').addEventListener('click', ()=>{ versusCategory='tradeFriendPick'; renderVersus(panel); });
+    document.getElementById('tcStranger').addEventListener('click', ()=>{ versusCategory='tradeStrangerPick'; renderVersus(panel); });
+    return;
+  }
+  if(versusCategory==='tradeFriendPick'){
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">TRADE WITH A FRIEND</div>${backRow}</div><div id="tradeFriendListInner"><div class="hint">Loading...</div></div>`;
+    document.getElementById('vcBack').addEventListener('click', ()=>{ versusCategory='tradeChoice'; renderVersus(panel); });
+    (async ()=>{
+      const listEl = document.getElementById('tradeFriendListInner');
+      const accepted = (state.friends||[]).filter(f=>f.status!=='pending' && f.playerId);
+      if(accepted.length===0){ listEl.innerHTML = `<div class="hint">No friends yet - add some from the Friends tab first.</div>`; return; }
+      const profiles = await Promise.all(accepted.map(async f=>{
+        try{ const res = await storageGet('hunter:'+f.playerId, true); return res&&res.value ? {playerId:f.playerId, profile:JSON.parse(res.value)} : null; }catch(e){ return null; }
+      }));
+      const valid = profiles.filter(Boolean);
+      if(currentTab!=='versus' || versusCategory!=='tradeFriendPick') return; // navigated away while this was in flight
+      if(valid.length===0){ listEl.innerHTML = `<div class="hint">Couldn't reach any of your friends right now.</div>`; return; }
+      listEl.innerHTML = valid.map((f,i)=> `<div class="log-row" style="cursor:pointer;" data-friend-trade="${i}"><span class="log-name">${escapeHtml(f.profile.name)}</span></div>`).join('');
+      listEl.querySelectorAll('[data-friend-trade]').forEach(row=>{
+        row.addEventListener('click', ()=>{
+          const f = valid[Number(row.dataset.friendTrade)];
+          showTradeInviteWaiting(f.playerId, f.profile.name);
+        });
+      });
+    })();
+    return;
+  }
+  if(versusCategory==='tradeStrangerPick'){
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">TRADE WITH SOMEONE NEW</div>${backRow}</div>
+      <div class="hint">Enter their exact Hunter Username.</div>
+      <div class="manual-row" style="margin-top:6px;"><input id="tradeStrangerInput" placeholder="Enter Username" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px;box-sizing:border-box;font-size:12px;"><button class="btn yolk small" id="tradeStrangerBtn">Send</button></div>`;
+    document.getElementById('vcBack').addEventListener('click', ()=>{ versusCategory='tradeChoice'; renderVersus(panel); });
+    document.getElementById('tradeStrangerBtn').addEventListener('click', async ()=>{
+      const target = document.getElementById('tradeStrangerInput').value.trim().toUpperCase();
+      if(!target){ showToast("Enter a Hunter Username"); return; }
+      if(target===state.hunterName){ showToast("That's your own username!"); return; }
+      try{
+        const targetId = await resolveUsernameToPlayerId(target);
+        if(!targetId){ showToast("No hunter found with that username"); return; }
+        showTradeInviteWaiting(targetId, target);
+      }catch(e){ showToast("Couldn't reach that hunter right now"); }
+    });
     return;
   }
   if(versusCategory==='lineup'){
@@ -6863,6 +6962,78 @@ async function connectNearby(code, panel){
   nearbyCode=code; nearbyDoc=doc; nearbyAppliedLocally=false;
   ensureNearbyPolling(panel);
   renderNearbyActive(panel);
+}
+async function sendTradeInvite(targetPlayerId, targetName){
+  const myId = ensurePlayerId();
+  const sessionCode = 'TR'+Math.random().toString(36).slice(2,10).toUpperCase();
+  try{
+    await storageSet('tradeInvite:'+targetPlayerId, JSON.stringify({fromId:myId, fromName:state.hunterName||'Hunter', sessionCode, accepted:false, timestamp:Date.now()}), true);
+    return sessionCode;
+  }catch(e){ return null; }
+}
+async function checkIncomingTradeInvite(){
+  const myId = ensurePlayerId();
+  try{
+    const res = await storageGet('tradeInvite:'+myId, true);
+    if(res && res.value){
+      const req = JSON.parse(res.value);
+      if(Date.now()-req.timestamp < 5*60000) return req; // ignore anything stale (over 5 minutes old) rather than resurrect a long-dead invite
+    }
+  }catch(e){}
+  return null;
+}
+async function declineTradeInvite(){
+  try{ await storageDelete('tradeInvite:'+ensurePlayerId(), true); }catch(e){}
+}
+async function acceptTradeInvite(req){
+  try{
+    req.accepted = true;
+    await storageSet('tradeInvite:'+ensurePlayerId(), JSON.stringify(req), true);
+  }catch(e){}
+}
+// Routes either side of an accepted trade invite straight into a live pairing session, the same
+// way an accepted battle request does - the session code was already exchanged silently through
+// Firebase, no manual code entry needed. Lands on the existing Trade/Battle toggle screen, so both
+// activities remain available once paired regardless of which one the invite was originally for.
+function enterTradeSession(sessionCode, panel){
+  nearbySubMode = 'trade';
+  currentTab = 'versus';
+  versusCategory = 'nearby';
+  connectNearby(sessionCode, panel);
+}
+function showTradeInviteWaiting(targetPlayerId, targetName){
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal-box" style="text-align:center;">
+    <div class="pixel sm">Sending trade invite to ${escapeHtml(targetName)}...</div>
+    <div class="hint" id="tiWaitStatus" style="margin-top:8px;">Waiting for them to accept...</div>
+    <div class="buttons-row"><button class="btn cream small full" id="tiWaitCancel">Cancel</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  let cancelled = false;
+  let pollTimer = null;
+  document.getElementById('tiWaitCancel').addEventListener('click', async ()=>{
+    cancelled = true;
+    clearInterval(pollTimer);
+    try{ await storageDelete('tradeInvite:'+targetPlayerId, true); }catch(e){}
+    overlay.remove();
+  });
+  (async ()=>{
+    const sessionCode = await sendTradeInvite(targetPlayerId, targetName);
+    if(!sessionCode || cancelled){ if(!cancelled){ showToast("Couldn't send that invite - try again"); overlay.remove(); } return; }
+    pollTimer = setInterval(async ()=>{
+      if(cancelled){ clearInterval(pollTimer); return; }
+      try{
+        const res = await storageGet('tradeInvite:'+targetPlayerId, true);
+        if(!res || !res.value){ clearInterval(pollTimer); if(!cancelled){ showToast(`${targetName} declined`); overlay.remove(); } return; }
+        const req = JSON.parse(res.value);
+        if(req.accepted){
+          clearInterval(pollTimer);
+          overlay.remove();
+          enterTradeSession(sessionCode, document.getElementById('panel'));
+        }
+      }catch(e){}
+    }, 2000);
+  })();
 }
 async function sendBattleRequest(targetPlayerId, targetName){
   const myId = ensurePlayerId();
@@ -7815,11 +7986,14 @@ function showNameAndSetup(){
     const input = document.getElementById('hunterNameInput');
     input.addEventListener('paste', e=> e.preventDefault());
     input.addEventListener('input', ()=>{ input.value = input.value.replace(/[^a-zA-Z0-9]/g,'').slice(0,15); });
-    document.getElementById('onboardGo').addEventListener('click', ()=>{
+    document.getElementById('onboardGo').addEventListener('click', async ()=>{
       const name = input.value.trim();
       if(!name){ showToast("Enter a name to continue"); return; }
       if(isProfane(name)){ showToast("Please choose a different name"); return; }
-      state.hunterName = name; state.hunterCode = name; saveState();
+      const goBtn = document.getElementById('onboardGo');
+      goBtn.disabled = true;
+      const result = await changeUsername(name);
+      if(!result.ok){ showToast(result.message); goBtn.disabled = false; return; }
       panel.innerHTML = '';
       screenEl.innerHTML = `<div id="onboardText" class="pixel sm" style="width:100%;box-sizing:border-box;text-align:left;line-height:1.7;font-size:11px;max-height:100%;overflow-y:auto;padding:6px 2px;"></div>`;
       typeLines(thanksLines(name), document.getElementById('onboardText'), ()=>{
