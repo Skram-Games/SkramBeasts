@@ -32,7 +32,9 @@ The whole game is a **single self-contained HTML file**. No build step, no bundl
 - **Daily Quests**: a rotating set of daily objectives.
 - **Eggs**: rare incubating finds that hatch into a guaranteed Rare-or-better Skrambeast after a wait. Ad-based time reduction is capped at 5 uses per egg.
 - **Hunter Rank**: a 22-tier progression ladder, separate from individual monster levels. Once the whole squad is maxed out, battle XP overflows into Hunter Rank instead of being wasted, and converts to coins once Hunter Rank is maxed too. Player VS Player wins feed into this as well.
-- **Friends & Global Leaderboard**: Firebase-backed, keyed by a stable internal player ID rather than the display username, so renaming no longer orphans friend connections. Friends list mimics a classic online/last-seen layout; Global shows the top 20 hunters by Hunter XP.
+- **Squad Analysis**: an on-demand panel that checks your favourited squad for type coverage gaps, unequipped members, a level-behind weak link, and offence/defence balance, with a specific bench suggestion when it finds one worth making. Each suggestion has its own dismiss button, so acting on one clears just that one rather than the whole panel.
+- **Notification badges**: the Scan, Squad, and Log tabs show a live count for eggs ready to hatch, unresolved Squad Analysis suggestions, unseen completed Daily Quests, and pending friend requests.
+- **Friends & Global Leaderboard**: Firebase-backed, keyed by a stable internal player ID rather than the display username, so renaming no longer orphans friend connections. Adding someone sends a real request rather than adding them instantly; they see it in a dedicated Requests section and can accept or decline. Friends list mimics a classic online/last-seen layout; Global shows the top 20 hunters by Hunter XP.
 - **Player VS Player**: reworked around two paths from one entry point.
   - **The Line Up**: a live waiting room. Step in and other hunters currently browsing become visible in real time, paginated once it fills up. Tap someone to send an instant challenge, with a real pop-up for whoever's on the receiving end rather than a buried menu slot. Also where co-op Queen Raids get formed and joined.
   - **Pair by Code**: the original short-code pairing flow, kept for trading or for connecting with someone specific rather than whoever happens to be around.
@@ -48,12 +50,13 @@ The whole game is a **single self-contained HTML file**. No build step, no bundl
 - **Shared backend**: Friends, the Global Leaderboard, Player VS Player pairing, the Line Up, and Queen Raids all run on a live Firebase Realtime Database project. This data is not domain-scoped, so it survives hosting changes on its own. Only the local save is at risk when switching hosts.
 - **No server-side code**: everything runs client-side; Firebase is accessed directly via its REST API.
 - **Multi-participant sync**: both Player VS Player duels and Queen Raids avoid a common pitfall with several simultaneous writers. No client ever overwrites another player's data, because each participant only ever writes to their own slot in the shared document. A raid's remaining HP, for example, is computed by summing everyone's individually-tracked damage rather than decrementing one shared number. That's what makes it safe for multiple people to hit the same target at once without losing hits to a race condition.
+- **Disconnect detection**: once both sides of a duel are ready, each client writes a lightweight heartbeat timestamp on its own poll cycle. If an opponent's heartbeat goes stale for 25 seconds, the waiting player gets a clear message and a clean way to leave, instead of an indefinite, uninformative wait with no signal either way.
 
 ## Current status
 
-Firmware `5.2`, beta. Hosted on GitHub Pages (`skram-games.github.io/SkramBeasts`).
+Firmware `6.0`, beta. Hosted on GitHub Pages (`skram-games.github.io/SkramBeasts`).
 
-An Android build exists via Bubblewrap (TWA), package `io.github.skram_games.twa`, and installs and loads correctly on a real device. Still pending before a full, non-beta release: real rewarded-ad network integration (currently fully simulated), Player VS Player disconnect and abandonment handling for 1-on-1 duels specifically, turning the decrypt-a-code sequence into an actual interactive step rather than just an animation, and the Play App Signing fingerprint below.
+An Android build exists via Bubblewrap (TWA), package `io.github.skram_games.twa`, and installs and loads correctly on a real device. Still pending before a full, non-beta release: real rewarded-ad network integration (currently fully simulated), turning the decrypt-a-code sequence into an actual interactive step rather than just an animation, and the Play App Signing fingerprint below.
 
 ## Known limitations
 

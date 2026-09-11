@@ -1054,11 +1054,9 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '5.9';
+const FIRMWARE_VERSION = '6.0';
 const FIRMWARE_CHANGELOG = [
-  'New: real Friend Requests - "Add a Hunter" now sends a request instead of adding them instantly. A Requests section shows anyone waiting on you, with Accept or Decline right there',
-  'The Friends button shows a badge for pending incoming requests, checked whenever you visit Friends',
-  'Social Butterfly now only counts mutual, accepted friendships - not requests still waiting on someone',
+  'Player VS Player duels now detect a genuine opponent disconnect - if they go silent for 25 seconds after both sides are ready, you get a clear "opponent seems to have disconnected" message and a clean way to leave, instead of an indefinite, uninformative wait',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -7377,6 +7375,10 @@ function ensureNearbyPolling(panel){
     const fresh = await fetchNearbyDoc(nearbyCode);
     if(!fresh) return;
     nearbyDoc = fresh;
+    if(nearbySubMode==='battle' && nearbyRole){
+      const mySide2 = mySide(fresh,'battle');
+      if(mySide2 && mySide2.ready){ mySide2.lastActiveAt = Date.now(); saveNearbyDocRaw(nearbyCode, fresh); } // heartbeat - lets the other side detect a genuine disconnect rather than wait forever
+    }
     evaluateNearbyTradeAndSave();
     evaluateNearbyBattle();
     renderNearbyActive(panel);
@@ -7597,6 +7599,16 @@ function evaluateNearbyBattle(){
 }
 let nearbyDuelInProgress = false;
 let hiveRunActive = false;
+const NEARBY_ABANDON_TIMEOUT_MS = 25000;
+function renderNearbyWaiting(container, waitingText, theirs){
+  const stale = theirs.lastActiveAt && (Date.now()-theirs.lastActiveAt > NEARBY_ABANDON_TIMEOUT_MS);
+  if(stale){
+    container.innerHTML = `<div class="hint" style="text-align:center;color:#a13a24;">Your opponent seems to have disconnected.</div><div class="buttons-row" style="margin-top:8px;"><button class="btn yolk small full" id="nbAbandonLeaveBtn">Leave Duel</button></div>`;
+    document.getElementById('nbAbandonLeaveBtn').addEventListener('click', leaveNearby);
+  } else {
+    container.innerHTML = `<div class="hint">${waitingText}</div>`;
+  }
+}
 function renderNearbyBattle(container, panel){
   const doc = nearbyDoc, mine = mySide(doc,'battle'), theirs = theirSide(doc,'battle');
   if(mine.ready && theirs.ready && mine.myResult && theirs.myResult){
@@ -7636,12 +7648,12 @@ function renderNearbyBattle(container, panel){
     return;
   }
   if(mine.ready && theirs.ready && mine.myResult && !theirs.myResult){
-    container.innerHTML = `<div class="hint">You defeated ${mine.myResult.defeatedCount}/5. Waiting for the other player to finish their fight...</div>`;
+    renderNearbyWaiting(container, `You defeated ${mine.myResult.defeatedCount}/5. Waiting for the other player to finish their fight...`, theirs);
     return;
   }
   if(mine.ready && theirs.ready && !mine.myResult){
     if(nearbyDuelInProgress) return;
-    if(theirs.team.length===0){ container.innerHTML = `<div class="hint">Waiting for the other player's team...</div>`; return; }
+    if(theirs.team.length===0){ renderNearbyWaiting(container, "Waiting for the other player's team...", theirs); return; }
     nearbyDuelInProgress = true;
     startNearbyDuelBattle(nearbyMyBattleTeam.map(id=> state.collection.find(m=>m.id===id)), theirs.team, container, async (result)=>{
       mine.myResult = { defeatedCount: result.defeatedCount, survivingHp: result.survivingHp, log: result.log };
@@ -7658,6 +7670,7 @@ function renderNearbyBattle(container, panel){
     if(nearbyMyBattleTeam.length===0){ showToast("Pick at least one Skrambeast"); return; }
     mine.team = nearbyMyBattleTeam.map(id=> state.collection.find(m=>m.id===id));
     mine.ready = true;
+    mine.lastActiveAt = Date.now();
     await saveNearbyDocRaw(nearbyCode, doc);
     renderNearbyBattle(container, panel);
   });
