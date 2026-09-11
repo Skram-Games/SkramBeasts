@@ -381,6 +381,7 @@
   @keyframes swordGlow{0%,100%{filter:drop-shadow(0 0 2px #FF6B1A);}50%{filter:drop-shadow(0 0 7px #FF6B1A) drop-shadow(0 0 3px #FFD23D);}}
   @keyframes eggWiggle{0%,100%{transform:rotate(0deg);}20%{transform:rotate(-8deg);}40%{transform:rotate(7deg);}60%{transform:rotate(-5deg);}80%{transform:rotate(4deg);}}
   @keyframes tapPulse{0%{transform:scale(1);}50%{transform:scale(1.18); background:rgba(232,84,46,.4);}100%{transform:scale(1);}}
+  @keyframes missionFightPulse{0%,100%{opacity:1;}50%{opacity:.7;}}
   .battle-log{margin-top:2px; height:38px; overflow-y:auto; font-size:10px; text-align:left; background:rgba(0,0,0,.05); border:1.5px solid rgba(0,0,0,.15); border-radius:6px; padding:6px; width:100%; flex:none;}
   .battle-log-label{font-family:'Baloo 2',sans-serif; font-weight:700; font-size:10px; color:#555; margin-top:8px;}
 
@@ -584,6 +585,9 @@ function achievementIcon(key){
     case 'royalCourt': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 18h16l-1.5-9-4 4-2.5-6-2.5 6-4-4L4 18z" fill="#fff"/></svg>`;
     case 'pvpDuelist': return iconSkull('#fff', 20);
     case 'raidSlayer': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 18h16l-1.5-9-4 4-2.5-6-2.5 6-4-4L4 18z" fill="#fff"/></svg>`;
+    case 'missionRunner': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 20 L10 6 L14 6 L20 20 Z" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 13 L15 13" stroke="#fff" stroke-width="1.6"/></svg>`;
+    case 'tagCollector': return skramTagSVG('#fff', 20);
+    case 'legendaryExplorer': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 20 L12 4 L18 20 Z" fill="#fff"/><path d="M9 8 L11 2 L13 8 L15 4 L16 9" fill="none" stroke="#fff" stroke-width="1.4"/></svg>`;
     default: return '';
   }
 }
@@ -808,7 +812,7 @@ async function storageDelete(key, shared){
   catch(e){ return null; }
 }
 
-let state = { coins: 20, collection: [], discarded: [], owned: {}, inventory: {}, almanac: {}, itemsTaken: [], activeBoosts: {}, hunterXP: 0, activeBoss: null, settings: { soundEffects:true, reducedMotion:false, colorblindSafe:false, highContrast:false, lightMode:false, autoFighter:false }, scannerCustomization: { shell:'teal', laser:'red', orientation:'horizontal' }, achievementTierAwarded: {}, dailyLogin: { lastClaim:null, streak:0 }, arenaSkipCount:0, arenaSkipCooldownUntil:0, freeAdBoostCooldownUntil:0, eggs: [], battlesSinceBoss:0, lifetimeBattlesTowardBoss:0, easterEggsFound: [], easterEggSteps: {}, stats: { totalFights:0, totalWins:0, totalLosses:0, currentStreak:0, bestStreak:0, highestFought:null, discoveryDates:{}, bossesEncountered:0, bossWins:0, bossDefeats:0, strongestBossLevel:0, oneHitKOs:0, lifetimeCoins:0, eggsHatched:0, totalPlayTimeMs:0 } };
+let state = { coins: 20, collection: [], discarded: [], owned: {}, inventory: {}, almanac: {}, itemsTaken: [], activeBoosts: {}, hunterXP: 0, activeBoss: null, settings: { soundEffects:true, reducedMotion:false, colorblindSafe:false, highContrast:false, lightMode:false, autoFighter:false }, scannerCustomization: { shell:'teal', laser:'red', orientation:'horizontal' }, achievementTierAwarded: {}, dailyLogin: { lastClaim:null, streak:0 }, arenaSkipCount:0, arenaSkipCooldownUntil:0, freeAdBoostCooldownUntil:0, eggs: [], missions: [null,null,null,null,null], skramTags: {common:0,uncommon:0,rare:0,epic:0,legendary:0}, battlesSinceBoss:0, lifetimeBattlesTowardBoss:0, easterEggsFound: [], easterEggSteps: {}, stats: { totalFights:0, totalWins:0, totalLosses:0, currentStreak:0, bestStreak:0, highestFought:null, discoveryDates:{}, bossesEncountered:0, bossWins:0, bossDefeats:0, strongestBossLevel:0, oneHitKOs:0, lifetimeCoins:0, eggsHatched:0, totalPlayTimeMs:0 } };
 function trackBattleResult(won, opponent){
   const s = state.stats;
   s.totalFights++;
@@ -1054,11 +1058,20 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '6.3';
+const MISSION_TIERS = [
+  {key:'common', name:'Common', color:'#8FA998', durationMs:15*60000, encounters:1, scene:'meadow', coinReward:50, xpReward:30},
+  {key:'uncommon', name:'Uncommon', color:'#4E8FD1', durationMs:40*60000, encounters:1, scene:'forest', coinReward:150, xpReward:80},
+  {key:'rare', name:'Rare', color:'#9B5DE5', durationMs:90*60000, encounters:2, scene:'mountains', coinReward:400, xpReward:200},
+  {key:'epic', name:'Epic', color:'#F77F00', durationMs:3*3600000, encounters:2, scene:'coast', coinReward:900, xpReward:450},
+  {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
+];
+const MISSION_MAX_SLOTS = 5;
+const FIRMWARE_VERSION = '6.4';
 const FIRMWARE_CHANGELOG = [
-  'Trading has been fully redesigned: "Trade" now asks whether you want a friend or someone new, then sends them a direct invite by username - no more manually sharing a random code',
-  'Accepting an invite drops you straight into the trade/battle screen together, exactly like an accepted duel request already does',
-  'Unanswered invites time out after 5 minutes, matching how duel requests already behave',
+  'Missions is complete: mid-mission encounters are real tap battles now, with the ad-revive-to-75%-HP save and a 5-minute rest penalty for a retreat or loss',
+  'New: Skram Tags, earned only from winning Mission encounters, tier-matched to the mission and never tradeable - collect them for a real reveal moment',
+  'New: the Quartermaster store section spends Tags instead of coins, capped by a five-item catalog topped by the Legendary-exclusive Explorer\u2019s Regalia',
+  'New Missions stats page and three achievements: Mission Runner, Tag Collector, and Legendary Explorer',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1868,6 +1881,9 @@ function costumeSVG(key){
     case 'championBelt': return '<rect x="30" y="72" width="40" height="7" rx="2" fill="#D4A017" stroke="#1A1F1C" stroke-width="1.4"/><rect x="45" y="71" width="10" height="9" rx="1.5" fill="#F2C13D" stroke="#1A1F1C" stroke-width="1"/>';
     case 'heroCape': return '<path d="M24 47 L76 47 L70 96 L30 96 Z" fill="#9B5DE5" opacity=".85" stroke="#1A1F1C" stroke-width="1.4"/><path d="M30 47 L28 92 M50 47 L50 94 M70 47 L72 92" stroke="#1A1F1C" stroke-width="0.8" opacity=".3"/>';
     case 'coolGlasses': return '<rect x="32" y="49" width="14" height="8" rx="2" fill="#1A1F1C" opacity=".8"/><rect x="54" y="49" width="14" height="8" rx="2" fill="#1A1F1C" opacity=".8"/><rect x="46" y="51" width="8" height="2" fill="#1A1F1C"/>';
+    case 'dogTagChain': return '<path d="M30 60 Q50 68 70 60" fill="none" stroke="#8a8a8a" stroke-width="2"/><rect x="44" y="62" width="12" height="16" rx="2" fill="#D4A017" stroke="#1A1F1C" stroke-width="1.3"/><circle cx="50" cy="66" r="1.5" fill="#1A1F1C"/>';
+    case 'veteranSash': return '<path d="M28 45 L52 95 L62 91 L38 41 Z" fill="#8FA998" opacity=".9" stroke="#1A1F1C" stroke-width="1.4"/><circle cx="45" cy="70" r="4" fill="#D4A017" stroke="#1A1F1C" stroke-width="1"/>';
+    case 'explorerRegalia': return '<path d="M28 45 L72 45 L66 95 L34 95 Z" fill="#F77F00" opacity=".55" stroke="#1A1F1C" stroke-width="1.4"/><rect x="40" y="38" width="20" height="9" rx="2" fill="#8a6d1a" stroke="#1A1F1C" stroke-width="1.2"/><circle cx="50" cy="66" r="5" fill="#D4A017" stroke="#1A1F1C" stroke-width="1.2"/>';
     case 'queensCrown': return `<path d="M32.8 5.5 L36.2 -12.9 L44.3 -1.4 L50 -17.5 L55.8 -1.4 L63.8 -12.9 L67.3 5.5 Z" fill="url(#queensCrownGrad)" stroke="#8a6d1a" stroke-width="2"/>
       <circle cx="50" cy="-3.7" r="2.9" fill="#a13a24"/><circle cx="40.8" cy="3.2" r="2.3" fill="#4E8FD1"/><circle cx="59.2" cy="3.2" r="2.3" fill="#4E8FD1"/>
       <defs><linearGradient id="queensCrownGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFE27A"/><stop offset="100%" stop-color="#B8791C"/></linearGradient></defs>`;
@@ -2095,6 +2111,9 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'royalCourt', name:'Royal Court', desc:'Capture wild Queens', guide:'Buy a Smoker from the Scanner section of the Store, then defeat a wild Queen while holding one and select it when the capture option appears. The top tier means enough Queens for a full squad of 5.', getValue: ()=> state.stats.queensCaptured||0, tiers:[1,2,3,4,5]},
   {key:'pvpDuelist', name:'Duelist', desc:'Win Player VS Player battles', guide:'Pair with another hunter under Player VS Player and win a duel. Win streaks earn you a skull badge visible to your opponent, starting at 3 wins in a row.', getValue: ()=> state.stats.pvpWins||0, tiers:[1,10,30,75,150]},
   {key:'raidSlayer', name:'Raid Slayer', desc:'Defeat Queens in a co-op Raid', guide:'Start or join a Queen Raid from the Line Up - a shared, much tougher Queen that a whole party of up to 5 fights together. Everyone present when she falls gets their own rewards.', getValue: ()=> state.stats.raidQueensDefeated||0, tiers:[1,5,15,30,50]},
+  {key:'missionRunner', name:'Mission Runner', desc:'Complete Missions', guide:'Send a bench Skrambeast on a Mission from the Missions tab. Higher tiers take longer and carry real risk, but pay out more.', getValue: ()=> state.stats.missionsCompleted||0, tiers:[1,10,30,75,150]},
+  {key:'tagCollector', name:'Tag Collector', desc:'Earn Skram Tags', guide:'Win a mid-Mission encounter to earn a Skram Tag matching that Mission tier. Spend them at the Quartermaster, or keep collecting.', getValue: ()=> state.stats.lifetimeSkramTags||0, tiers:[1,10,30,75,150]},
+  {key:'legendaryExplorer', name:'Legendary Explorer', desc:'Survive Legendary Missions', guide:'A Legendary Mission is the toughest tier - 6 hours, 3 real encounters. Winning all of them without retreating completes it.', getValue: ()=> state.stats.legendaryMissionsSurvived||0, tiers:[1,3,8,15,25]},
   {key:'globalAce', name:'Global Ace', desc:"Rank on the Global leaderboard", guide:"Open Friends > Global to see how you stack up against every hunter, not just your friends. Earning more Hunter XP climbs you higher - the top 20 make the board at all.", getValue: ()=> state.stats.bestGlobalRank ? Math.max(0, 21-state.stats.bestGlobalRank) : 0, tiers:[1,11,16,18,20]},
 ];
 function achievementsUnlockedCount(){
@@ -2624,6 +2643,9 @@ const COSTUME_ITEMS = [
   {key:'partyHatBlue', name:'Blue Party Hat', desc:'Collectible - mystery box only', cost:0, partyHat:true, color:'#2E5FA8'},
   {key:'partyHatGreen', name:'Green Party Hat', desc:'Collectible - mystery box only', cost:0, partyHat:true, color:'#3F9142'},
   {key:'partyHatPurple', name:'Purple Party Hat', desc:'Collectible - mystery box only, the rarest color', cost:0, partyHat:true, color:'#8E44AD'},
+  {key:'dogTagChain', name:'Dog Tag Chain', desc:'Quartermaster exclusive - purely cosmetic', cost:0},
+  {key:'veteranSash', name:"Veteran's Sash", desc:'Quartermaster exclusive - slightly better Mission encounter odds while worn', cost:0, missionOddsBonus:0.05},
+  {key:'explorerRegalia', name:"Explorer's Regalia", desc:'Quartermaster exclusive - the full set, earned through real combat', cost:0},
 ];
 // Odds mirror the real-world OSRS party hat rarity order (yellow most common, purple rarest) - colors match, our hat shape doesn't copy theirs.
 const PARTY_HAT_TIERS = [
@@ -2819,7 +2841,228 @@ function queenSquadMultiplier(favs){
   const queenCount = (favs||favoritedSquad()).filter(m=>m.isBoss).length;
   return 1 + queenCount*0.15;
 }
+function monsterOnMission(m){
+  return (state.missions||[]).some(slot=> slot && slot.monsterId===m.id);
+}
+// Rolls checkpoint positions once, at mission start - loose windows rather than fixed evenly-spaced
+// points or pure randomness, so a multi-encounter mission doesn't feel metronomic across every run.
+function rollMissionCheckpoints(encounterCount){
+  if(encounterCount===1) return [0.3 + Math.random()*0.4];
+  if(encounterCount===2) return [0.25+Math.random()*0.2, 0.55+Math.random()*0.2];
+  return [0.15+Math.random()*0.15, 0.4+Math.random()*0.15, 0.65+Math.random()*0.2];
+}
+function startMission(slotIndex, monster, tierKey){
+  const tier = MISSION_TIERS.find(t=>t.key===tierKey);
+  state.missions[slotIndex] = {
+    monsterId: monster.id,
+    tierKey,
+    startedAt: Date.now(),
+    durationMs: tier.durationMs,
+    checkpoints: rollMissionCheckpoints(tier.encounters),
+    checkpointsResolved: 0,
+    status: 'inProgress',
+    pausedAt: null
+  };
+  saveState();
+}
+function missionProgress(slot){
+  if(slot.status==='needsBattle') return slot.checkpoints[slot.checkpointsResolved||0];
+  return Math.min(1, (Date.now()-slot.startedAt)/slot.durationMs);
+}
+function missionReady(slot){
+  return slot.status!=='needsBattle' && missionProgress(slot)>=1;
+}
+// Checks whether a running mission has crossed its next unresolved checkpoint, pausing it if so -
+// called on every Missions Log tick and from refreshTabBadges, so this triggers whether or not the
+// player is actually looking at the Missions screen when the moment arrives.
+function updateMissionCheckpoints(){
+  (state.missions||[]).forEach(slot=>{
+    if(!slot || slot.status==='needsBattle') return;
+    const idx = slot.checkpointsResolved||0;
+    if(idx>=slot.checkpoints.length) return;
+    const raw = (Date.now()-slot.startedAt)/slot.durationMs;
+    if(raw>=slot.checkpoints[idx]){ slot.status='needsBattle'; slot.pausedAt=Date.now(); saveState(); }
+  });
+}
+function resolveMissionCheckpointWin(slotIndex){
+  const slot = state.missions[slotIndex];
+  if(!slot) return;
+  slot.startedAt += (Date.now()-slot.pausedAt); // the paused/fighting time doesn't count against mission duration
+  slot.checkpointsResolved = (slot.checkpointsResolved||0)+1;
+  slot.status = 'inProgress';
+  slot.pausedAt = null;
+  saveState();
+}
+function failMission(slotIndex){
+  const slot = state.missions[slotIndex];
+  if(!slot) return;
+  const monster = state.collection.find(m=>m.id===slot.monsterId);
+  if(monster) monster.tiredUntil = Date.now()+5*60000; // flat 5-minute penalty regardless of REST_MS elsewhere - only matters if you wanted this Skrambeast back sooner
+  state.missions[slotIndex] = null;
+  saveState();
+}
+function skramTagSVG(color, size){
+  const s = size||16;
+  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}"><path d="M6 4h9l6 6v10a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" fill="${color}" stroke="#1A1F1C" stroke-width="1.3"/><circle cx="16" cy="9" r="1.6" fill="#1A1F1C"/></svg>`;
+}
+function grantSkramTag(tierKey){
+  if(!state.skramTags) state.skramTags={common:0,uncommon:0,rare:0,epic:0,legendary:0};
+  state.skramTags[tierKey] = (state.skramTags[tierKey]||0)+1;
+  state.stats.lifetimeSkramTags = (state.stats.lifetimeSkramTags||0)+1;
+  saveState();
+}
+function showSkramTagReveal(tierKey){
+  const tier = MISSION_TIERS.find(t=>t.key===tierKey);
+  whiteFlash(()=>{
+    const overlay = document.createElement('div'); overlay.className='modal-overlay';
+    overlay.innerHTML = `<div class="modal-box" style="text-align:center;">
+      ${celebrationHTML(true,'SKRAM TAG!')}
+      <div style="width:70px;height:70px;margin:8px auto;">${skramTagSVG(tier.color,70)}</div>
+      <div class="pixel sm">${tier.name} Skram Tag earned!</div>
+      <div class="buttons-row"><button class="btn yolk small full" id="tagRevealClose">Nice!</button></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    document.getElementById('tagRevealClose').addEventListener('click', ()=> overlay.remove());
+  });
+}
+function skramTagSellValue(tierKey){
+  return {common:25,uncommon:35,rare:60,epic:100,legendary:180}[tierKey]||25;
+}
+function generateMissionOpponent(tierKey){
+  const tierIdx = MISSION_TIERS.findIndex(t=>t.key===tierKey);
+  const levelByTier = [30,70,120,165,210];
+  const barcode = 'mission-opp-'+Date.now()+'-'+Math.floor(Math.random()*100000);
+  return generateMonster(barcode, RARITY_ORDER[tierIdx], levelByTier[tierIdx]);
+}
+function startMissionEncounter(slotIndex, container, onResolve){
+  const slot = state.missions[slotIndex];
+  const monster = state.collection.find(m=>m.id===slot.monsterId);
+  const opponent = generateMissionOpponent(slot.tierKey);
+  let resolved=false, lastTapAt=0, opponentTimer=null, autoFighterTimer=null, revivedOnce=false;
+  let fHp = effectiveStatsWithBuff(monster).hp, maxFHp=fHp, wHp=opponent.stats.hp, maxWHp=wHp;
+  container.innerHTML = `
+    <div class="pixel sm" style="text-align:center;">A ${escapeHtml(opponent.name)} blocks the path!</div>
+    <div class="float" style="margin:6px auto;display:flex;justify-content:center;position:relative;" id="missionOppWrap">${monsterSVG(opponent,70)}</div>
+    <div class="hp-bar-wrap" style="width:120px;margin:4px auto;"><div class="hp-bar-fill" id="missionOppBar" style="width:100%;"></div></div>
+    ${specialBarHTML('missionSpecial')}
+    <div style="display:flex;justify-content:center;margin:8px auto;"><div class="tap-center" id="missionTapZone"></div></div>
+    <div class="hp-bar-wrap" style="width:120px;margin:4px auto;"><div class="hp-bar-fill" id="missionFighterBar" style="width:100%;background:#3f9142;"></div></div>
+    <div class="pixel sm" style="text-align:center;">${escapeHtml(monster.name)}</div>
+    ${state.settings.autoFighter?`<div class="hint" style="text-align:center;">Auto Fighter is on - this fight will resolve on its own.</div>`:''}
+    <div class="battle-log-label">Battle Log</div>
+    <div class="battle-log" id="missionBattleLog"></div>`;
+  const oppBar=document.getElementById('missionOppBar'), fBar=document.getElementById('missionFighterBar');
+  const logEl=document.getElementById('missionBattleLog'), tapZone=document.getElementById('missionTapZone');
+  function addLog(t){ logEl.innerHTML+=t+'<br>'; logEl.scrollTop=logEl.scrollHeight; }
+  const specialCtrl = createSpecialAttackController('missionSpecial', document.getElementById('missionOppWrap'), ()=>{
+    if(resolved) return;
+    const dmg = effectiveStatsWithBuff(monster).power+3;
+    wHp-=dmg; addLog(`${monster.name} unleashes a special attack for ${dmg}!`); sfxCritical();
+    updateBars();
+  });
+  function updateBars(){
+    oppBar.style.width=Math.max(0,wHp/maxWHp*100)+'%'; oppBar.style.background=hpBarColor(Math.max(0,wHp)/maxWHp);
+    fBar.style.width=Math.max(0,fHp/maxFHp*100)+'%';
+    if(wHp<=0 && !resolved) finish(true);
+    else if(fHp<=0 && !resolved) handleDefeat();
+  }
+  function handleDefeat(){
+    if(revivedOnce){ finish(false); return; }
+    clearInterval(opponentTimer);
+    const reviveOverlay = document.createElement('div'); reviveOverlay.className='modal-overlay';
+    reviveOverlay.innerHTML = `<div class="modal-box" style="text-align:center;">
+      <div class="pixel sm">${escapeHtml(monster.name)} is about to fall!</div>
+      <div class="hint">Watch an ad for a second chance?</div>
+      <div class="buttons-row"><button class="btn coral small full" id="missionReviveYes">Watch Ad</button></div>
+      <div class="buttons-row"><button class="btn cream small full" id="missionReviveNo">No Thanks</button></div>
+    </div>`;
+    document.body.appendChild(reviveOverlay);
+    document.getElementById('missionReviveYes').addEventListener('click', ()=>{
+      reviveOverlay.remove();
+      showRewardedAd(()=>{
+        revivedOnce=true; fHp=Math.round(maxFHp*0.75); updateBars();
+        addLog(`${monster.name} gets back up!`);
+        opponentTimer = setInterval(opponentTick, Math.max(550, opponentTickInterval(opponent)));
+      });
+    });
+    document.getElementById('missionReviveNo').addEventListener('click', ()=>{ reviveOverlay.remove(); finish(false); });
+  }
+  function opponentTick(){
+    if(resolved) return;
+    const fs = effectiveStats(monster);
+    const dmg = Math.max(1, Math.round(opponent.stats.power - fs.guard*0.35 + (Math.random()*8-4)));
+    fHp-=dmg; sfxHit();
+    addLog(`${opponent.name} hits ${monster.name} for ${dmg}.`);
+    updateBars();
+  }
+  function onTap(){
+    if(resolved) return;
+    const now=Date.now(); if(now-lastTapAt<TAP_MIN_GAP_MS) return; lastTapAt=now;
+    const fs = effectiveStatsWithBuff(monster);
+    let dmg = Math.max(1, Math.round(fs.power*0.28 - opponent.stats.guard*0.12 + (isMaxHitActive()?2:Math.random()*2)));
+    const typeMult = typeMatchupMultiplier(monster.type, opponent.type);
+    dmg = Math.round(dmg*typeMult);
+    wHp-=dmg; sfxHit();
+    specialCtrl.registerHit();
+    addLog(`${monster.name} hits ${opponent.name} for ${dmg}.${typeMult>1?' Super effective!':typeMult<1?' Not very effective.':''}`);
+    tapZone.classList.remove('tap-pulse'); void tapZone.offsetWidth; tapZone.classList.add('tap-pulse');
+    updateBars();
+  }
+  function finish(won){
+    if(resolved) return; resolved=true;
+    clearInterval(opponentTimer); clearInterval(autoFighterTimer);
+    tapZone.removeEventListener('click', onTap);
+    onResolve(won);
+  }
+  tapZone.addEventListener('click', onTap);
+  autoFighterTimer = maybeStartAutoFighter(onTap);
+  opponentTimer = setInterval(opponentTick, Math.max(550, opponentTickInterval(opponent)));
+}
+function missionTimeRemainingLabel(slot){
+  const tier = MISSION_TIERS.find(t=>t.key===slot.tierKey);
+  const msLeft = Math.max(0, tier.durationMs-(Date.now()-slot.startedAt));
+  const h = Math.floor(msLeft/3600000), m = Math.floor((msLeft%3600000)/60000), s = Math.floor((msLeft%60000)/1000);
+  if(h>0) return `${h}h ${m}m left`;
+  if(m>0) return `${m}m ${s}s left`;
+  return `${s}s left`;
+}
+function collectMissionReward(slotIndex){
+  const slot = state.missions[slotIndex];
+  if(!slot || !missionReady(slot)) return;
+  const tier = MISSION_TIERS.find(t=>t.key===slot.tierKey);
+  const monster = state.collection.find(m=>m.id===slot.monsterId);
+  addCoins(tier.coinReward);
+  if(monster) grantXP(monster, tier.xpReward);
+  const lootPool = [...WEAPON_ITEMS, ...ARMOR_ITEMS].filter(it=>it.tier===slot.tierKey);
+  let lootItem = null;
+  if(lootPool.length>0 && Math.random()<0.6){
+    lootItem = lootPool[Math.floor(Math.random()*lootPool.length)];
+    state.inventory[lootItem.key] = (state.inventory[lootItem.key]||0)+1;
+  }
+  state.stats.missionsCompleted = (state.stats.missionsCompleted||0)+1;
+  if(!state.stats.missionsCompletedByTier) state.stats.missionsCompletedByTier={};
+  state.stats.missionsCompletedByTier[slot.tierKey] = (state.stats.missionsCompletedByTier[slot.tierKey]||0)+1;
+  if(slot.tierKey==='legendary') state.stats.legendaryMissionsSurvived = (state.stats.legendaryMissionsSurvived||0)+1;
+  state.missions[slotIndex] = null;
+  saveState();
+  checkAchievements();
+  showToast(`Mission complete! +${formatCoins(tier.coinReward)} coins, +${tier.xpReward} XP${lootItem?`, found ${lootItem.name}`:''}`);
+}
+function missionSceneSVG(sceneKey){
+  const scenes = {
+    meadow: `<ellipse cx="20" cy="55" rx="35" ry="14"/><ellipse cx="65" cy="50" rx="30" ry="12"/><circle cx="15" cy="20" r="2.5"/><circle cx="35" cy="15" r="2.5"/><circle cx="55" cy="22" r="2.5"/><circle cx="78" cy="16" r="2.5"/>`,
+    forest: `<path d="M12 55 L22 25 L32 55 Z"/><path d="M30 58 L42 20 L54 58 Z"/><path d="M52 55 L62 28 L72 55 Z"/><path d="M68 58 L80 22 L92 58 Z"/>`,
+    mountains: `<path d="M0 58 L22 18 L38 38 L55 12 L78 42 L100 58 Z"/>`,
+    coast: `<path d="M0 30 Q10 24 20 30 T40 30 T60 30 T80 30 T100 30" fill="none" stroke-width="3"/><path d="M0 42 Q10 36 20 42 T40 42 T60 42 T80 42 T100 42" fill="none" stroke-width="3"/><circle cx="80" cy="14" r="8"/>`,
+    volcano: `<path d="M20 58 L45 14 L70 58 Z"/><path d="M40 10 L45 2 L50 10 L53 4 L56 12" fill="none" stroke-width="2.5"/>`,
+  };
+  return `<svg viewBox="0 0 100 60" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;opacity:.14;" fill="#1A1F1C">${scenes[sceneKey]||''}</svg>`;
+}
 function toggleFavorite(m){
+  if(monsterOnMission(m)){
+    showToast("This Skrambeast is out on a mission - can't favourite it until it's back");
+    return false;
+  }
   if(!m.favorite && favoritedSquad().length>=MAX_FAVORITES){
     showToast(`You can only favourite ${MAX_FAVORITES} - unfavourite one first to swap`);
     return false;
@@ -4369,21 +4612,207 @@ function attachSwipe(el, onLeft, onRight){
 let squadPage = 0;
 let squadFilter = 'all';
 let squadSubView = 'squad';
+let missionSubView = 'log', missionSelectedTier = null, missionSendingSlotIndex = null, missionSelectedMonsterId = null, missionBenchPage = 0, missionTickTimer = null;
 function renderSquadTab(panel){
+  const missionsReadyCount = (state.missions||[]).filter(s=>s && missionReady(s)).length;
   panel.innerHTML = `
     <div class="buttons-row" style="margin-top:0;">
       <button class="btn ${squadSubView==='profile'?'yolk':'cream'} small" id="squadModeProfile">PROFILE</button>
       <button class="btn ${squadSubView==='squad'?'yolk':'cream'} small" id="squadModeSquad">SQUAD</button>
       <button class="btn ${squadSubView==='friends'?'yolk':'cream'} small" id="squadModeFriends" style="position:relative;">FRIENDS${friendRequestBadgeCount>0?`<span class="tab-badge" style="display:flex;">${Math.min(9,friendRequestBadgeCount)}</span>`:''}</button>
+      <button class="btn ${squadSubView==='missions'?'yolk':'cream'} small" id="squadModeMissions" style="position:relative;">MISSIONS${missionsReadyCount>0?`<span class="tab-badge" style="display:flex;">${missionsReadyCount}</span>`:''}</button>
     </div>
     <div id="squadInner" style="margin-top:10px;"></div>`;
   document.getElementById('squadModeProfile').addEventListener('click', ()=>{ squadSubView='profile'; renderSquadTab(panel); });
   document.getElementById('squadModeSquad').addEventListener('click', ()=>{ squadSubView='squad'; renderSquadTab(panel); });
   document.getElementById('squadModeFriends').addEventListener('click', ()=>{ squadSubView='friends'; renderSquadTab(panel); });
+  document.getElementById('squadModeMissions').addEventListener('click', ()=>{ squadSubView='missions'; missionSubView='log'; renderSquadTab(panel); });
   const inner = document.getElementById('squadInner');
   if(squadSubView==='profile') renderProfile(inner, panel);
   else if(squadSubView==='friends') renderFriendsList(inner);
+  else if(squadSubView==='missions') renderMissions(inner, panel);
   else renderCollection(inner);
+}
+function renderMissions(container, panel){
+  if(missionSubView==='tierSelect') return renderMissionTierSelect(container, panel);
+  if(missionSubView==='benchPick') return renderMissionBenchPick(container, panel);
+  if(missionSubView==='confirm') return renderMissionConfirm(container, panel);
+  renderMissionsLog(container, panel);
+}
+function renderMissionsLog(container, panel){
+  clearInterval(missionTickTimer);
+  container.innerHTML = `<div class="hint">Send bench Skrambeasts on missions for loot and rewards - favourited Skrambeasts can't be sent.</div><div id="missionLanes" style="margin-top:8px;"></div>`;
+  function refreshLanes(){
+    updateMissionCheckpoints();
+    const lanesEl = document.getElementById('missionLanes');
+    if(!lanesEl) return;
+    lanesEl.innerHTML = state.missions.map((slot,i)=>{
+      if(!slot){
+        return `<div class="log-row" style="flex-direction:column;align-items:stretch;padding:10px;min-height:36px;justify-content:center;cursor:pointer;" data-avail-slot="${i}">
+          <div class="pixel sm" style="text-align:center;opacity:.6;">Available</div>
+        </div>`;
+      }
+      const tier = MISSION_TIERS.find(t=>t.key===slot.tierKey);
+      const monster = state.collection.find(m=>m.id===slot.monsterId);
+      const ready = missionReady(slot);
+      const needsBattle = slot.status==='needsBattle';
+      const pct = missionProgress(slot)*100;
+      return `<div class="log-row" style="position:relative;overflow:hidden;flex-direction:column;align-items:stretch;padding:10px;${needsBattle?'animation:missionFightPulse 1s ease-in-out infinite;':''}">
+        ${missionSceneSVG(tier.scene)}
+        <div style="position:relative;display:flex;align-items:center;gap:6px;">
+          ${monster?`<div style="width:24px;height:24px;flex-shrink:0;">${monsterSVG(monster,24)}</div>`:''}
+          <div class="log-name" style="flex:1;">${monster?escapeHtml(monster.name):'Unknown'}</div>
+          <span class="pixel sm" style="color:${tier.color};">${tier.name}</span>
+        </div>
+        <div style="position:relative;height:10px;background:rgba(0,0,0,.15);border-radius:5px;margin-top:6px;">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:${Math.min(100,pct)}%;background:${tier.color};border-radius:5px;"></div>
+          ${slot.checkpoints.map(cp=>`<div style="position:absolute;left:${cp*100}%;top:-2px;bottom:-2px;width:2px;background:#1A1F1C;opacity:.35;"></div>`).join('')}
+        </div>
+        <div style="position:relative;margin-top:4px;text-align:center;">
+          ${needsBattle ? `<button class="btn tiny coral" data-fight-slot="${i}" style="width:100%;">Fight!</button>`
+            : ready ? `<button class="btn tiny coral" data-collect-slot="${i}" style="width:100%;">Collect!</button>`
+            : `<span class="hint">${missionTimeRemainingLabel(slot)}</span>`}
+        </div>
+      </div>`;
+    }).join('');
+    lanesEl.querySelectorAll('[data-avail-slot]').forEach(el=> el.addEventListener('click', ()=>{
+      missionSendingSlotIndex = Number(el.dataset.availSlot);
+      missionSelectedTier = null;
+      missionBenchPage = 0;
+      missionSubView='tierSelect';
+      renderMissions(container, panel);
+    }));
+    lanesEl.querySelectorAll('[data-collect-slot]').forEach(btn=> btn.addEventListener('click', ()=>{
+      collectMissionReward(Number(btn.dataset.collectSlot));
+      refreshLanes();
+      refreshMissionsBadge();
+    }));
+    lanesEl.querySelectorAll('[data-fight-slot]').forEach(btn=> btn.addEventListener('click', ()=>{
+      const slotIdx = Number(btn.dataset.fightSlot);
+      clearInterval(missionTickTimer);
+      startMissionEncounter(slotIdx, container, (won)=>{
+        const failedTierKey = state.missions[slotIdx].tierKey;
+        if(won){
+          const wonSlot = state.missions[slotIdx];
+          const tierKey = wonSlot.tierKey;
+          state.stats.missionEncountersWon = (state.stats.missionEncountersWon||0)+1;
+          resolveMissionCheckpointWin(slotIdx);
+          grantSkramTag(tierKey);
+          showSkramTagReveal(tierKey);
+        }
+        else {
+          state.stats.missionEncountersRetreated = (state.stats.missionEncountersRetreated||0)+1; saveState();
+          failMission(slotIdx);
+          showToast("Defeated - the mission ends, and your Skrambeast needs to rest.");
+        }
+        checkAchievements();
+        renderMissionsLog(container, panel);
+      });
+    }));
+  }
+  function refreshMissionsBadge(){
+    const missionsBtn = document.getElementById('squadModeMissions');
+    const count = (state.missions||[]).filter(s=>s && (missionReady(s)||s.status==='needsBattle')).length;
+    if(missionsBtn) missionsBtn.innerHTML = `MISSIONS${count>0?`<span class="tab-badge" style="display:flex;">${count}</span>`:''}`;
+  }
+  refreshLanes();
+  refreshMissionsBadge();
+  missionTickTimer = setInterval(()=>{
+    if(currentTab!=='collection' || squadSubView!=='missions' || missionSubView!=='log'){ clearInterval(missionTickTimer); return; }
+    refreshLanes();
+    refreshMissionsBadge();
+  }, 1000);
+}
+function missionDurationLabel(durationMs){
+  const h = durationMs/3600000;
+  if(h>=1) return `${h}h`;
+  return `${Math.round(durationMs/60000)}m`;
+}
+function renderMissionTierSelect(container, panel){
+  container.innerHTML = `
+    <div class="hint" style="text-align:center;">Choose a mission tier</div>
+    <div id="missionTierList" style="margin-top:8px;"></div>
+    <div class="buttons-row" style="margin-top:10px;"><button class="btn cream small full" id="missionReturnLog">Return to Missions Log</button></div>`;
+  document.getElementById('missionTierList').innerHTML = MISSION_TIERS.map(t=> `<button class="btn small full" style="background:${t.color};color:#fff;margin-top:6px;" data-tier="${t.key}">${t.name} - ${missionDurationLabel(t.durationMs)}, ${t.encounters} ${t.encounters===1?'encounter':'encounters'}</button>`).join('');
+  document.getElementById('missionTierList').querySelectorAll('[data-tier]').forEach(btn=> btn.addEventListener('click', ()=>{
+    missionSelectedTier = btn.dataset.tier;
+    missionBenchPage = 0;
+    missionSubView='benchPick';
+    renderMissions(container, panel);
+  }));
+  document.getElementById('missionReturnLog').addEventListener('click', ()=>{
+    missionSubView='log';
+    renderMissions(container, panel);
+  });
+}
+function renderMissionBenchPick(container, panel){
+  const tier = MISSION_TIERS.find(t=>t.key===missionSelectedTier);
+  const bench = state.collection.filter(m=>!m.favorite && !monsterOnMission(m));
+  const totalPages = Math.max(1, Math.ceil(bench.length/SQUAD_PAGE_SIZE));
+  missionBenchPage = Math.min(missionBenchPage, totalPages-1);
+  const pageItems = bench.slice(missionBenchPage*SQUAD_PAGE_SIZE, missionBenchPage*SQUAD_PAGE_SIZE+SQUAD_PAGE_SIZE);
+  container.innerHTML = `
+    <div class="hint" style="text-align:center;">Choose your Soldier</div>
+    <div class="hint" style="text-align:center;color:${tier.color};">${tier.name} Mission</div>
+    ${bench.length>SQUAD_PAGE_SIZE?`<div class="page-bar" style="margin-top:6px;"><button class="btn tiny cream" id="missionBenchPrev" ${missionBenchPage===0?'disabled':''}>${iconChevron('left')}</button><span class="pixel sm">${missionBenchPage+1}/${totalPages}</span><button class="btn tiny cream" id="missionBenchNext" ${missionBenchPage>=totalPages-1?'disabled':''}>${iconChevron('right')}</button></div>`:''}
+    <div class="tile-grid" id="missionBenchGrid" style="margin-top:8px;"></div>
+    <div class="buttons-row" style="margin-top:10px;"><button class="btn cream small full" id="missionReturnLog">Return to Missions Log</button></div>`;
+  const grid = document.getElementById('missionBenchGrid');
+  if(bench.length===0){
+    grid.innerHTML = `<div class="hint" style="text-align:center;">No bench Skrambeasts available - everything's either favourited or already on a mission.</div>`;
+  } else {
+    pageItems.forEach(m=>{
+      const rs = RARITY_STYLE[m.rarity];
+      const tile = document.createElement('div');
+      tile.className = 'tile'+(m.holo?' holo':'');
+      tile.dataset.rarity = m.rarity;
+      tile.style.setProperty('--rarity', rs.color);
+      tile.innerHTML = `<div class="tile-icon">${monsterSVG(m,34)}</div>`;
+      tile.addEventListener('click', ()=>{
+        missionSelectedMonsterId = m.id;
+        missionSubView='confirm';
+        renderMissions(container, panel);
+      });
+      grid.appendChild(tile);
+    });
+  }
+  document.getElementById('missionReturnLog').addEventListener('click', ()=>{
+    missionSubView='log';
+    renderMissions(container, panel);
+  });
+  const prevBtn = document.getElementById('missionBenchPrev');
+  const nextBtn = document.getElementById('missionBenchNext');
+  if(prevBtn) prevBtn.addEventListener('click', ()=>{ if(missionBenchPage>0){ missionBenchPage--; renderMissions(container, panel); } });
+  if(nextBtn) nextBtn.addEventListener('click', ()=>{ if(missionBenchPage<totalPages-1){ missionBenchPage++; renderMissions(container, panel); } });
+}
+function renderMissionConfirm(container, panel){
+  const tier = MISSION_TIERS.find(t=>t.key===missionSelectedTier);
+  const monster = state.collection.find(m=>m.id===missionSelectedMonsterId);
+  if(!monster){ missionSubView='benchPick'; renderMissions(container, panel); return; }
+  const es = effectiveStats(monster);
+  container.innerHTML = `
+    <div class="float" style="margin:6px auto;display:flex;justify-content:center;">${monsterSVG(monster,70)}</div>
+    <div class="pixel sm" style="text-align:center;">${escapeHtml(monster.name)}</div>
+    <div class="hint" style="text-align:center;">Lv.${monster.level} · HP ${es.hp} · Power ${es.power} · Guard ${es.guard}</div>
+    <div class="hint" style="text-align:center;margin-top:6px;color:${tier.color};">Sending on a ${tier.name} Mission - ${missionDurationLabel(tier.durationMs)}, ${tier.encounters} ${tier.encounters===1?'encounter':'encounters'}</div>
+    ${monster.buffNextBattle?`<div class="hint" style="text-align:center;color:#a13a24;">${escapeHtml(monster.name)}'s active boost will end when sent on a mission.</div>`:''}
+    <div class="buttons-row" style="margin-top:10px;"><button class="btn coral small full" id="missionSendBtn">Send on Mission</button></div>
+    <div class="buttons-row"><button class="btn cream small full" id="missionBackBtn">Back</button></div>
+    <div class="buttons-row"><button class="btn cream small full" id="missionReturnLog">Return to Missions Log</button></div>`;
+  document.getElementById('missionSendBtn').addEventListener('click', ()=>{
+    startMission(missionSendingSlotIndex, monster, missionSelectedTier);
+    showToast(`${monster.name} set off on a ${tier.name} Mission!`);
+    missionSubView='log';
+    renderMissions(container, panel);
+  });
+  document.getElementById('missionBackBtn').addEventListener('click', ()=>{
+    missionSubView='benchPick';
+    renderMissions(container, panel);
+  });
+  document.getElementById('missionReturnLog').addEventListener('click', ()=>{
+    missionSubView='log';
+    renderMissions(container, panel);
+  });
 }
 function renderCollection(panel){
   if(state.collection.length===0){
@@ -5549,6 +5978,21 @@ function renderStatsPanel(container, panel){
         ${row('Best Win Streak', s.pvpBestStreak||0, '#D4A017')}
         ${curTier ? `<div class="log-row"><div class="log-info"><div class="log-name">Current Skull</div></div><div class="log-status" style="background:${curTier.color};display:flex;align-items:center;gap:4px;">${curTier.name}</div></div>` : ''}
         ${row('Queen Raids Won', s.raidQueensDefeated||0, '#D4A017')}`;
+    },
+    ()=>{
+      const byTier = s.missionsCompletedByTier||{};
+      const tags = state.skramTags||{};
+      const totalTags = MISSION_TIERS.reduce((sum,t)=> sum+(tags[t.key]||0), 0);
+      return `
+        <div class="section-label">Missions</div>
+        ${row('Missions Completed', s.missionsCompleted||0, '#8FA998')}
+        ${MISSION_TIERS.map(t=> row(`${t.name} Missions`, byTier[t.key]||0, t.color)).join('')}
+        ${row('Encounters Won', s.missionEncountersWon||0, '#3f9142')}
+        ${row('Encounters Retreated', s.missionEncountersRetreated||0, '#a13a24')}
+        ${row('Legendary Missions Survived', s.legendaryMissionsSurvived||0, '#D4A017')}
+        <div class="section-label" style="margin-top:6px;">Skram Tags</div>
+        ${MISSION_TIERS.map(t=> row(`${t.name} Tags`, tags[t.key]||0, t.color)).join('')}
+        ${row('Total Tags Held', totalTags, '#8FA998')}`;
     }
   ];
   const totalPages = pages.length;
@@ -5590,6 +6034,7 @@ const STORE_CATEGORIES = [
   {key:'boosts', name:'Boosts', desc:'Time-limited squad-wide XP, coin, and luck surges', icon:iconSparkle, color:'#9B5DE5'},
   {key:'specialist', name:'Specialist', desc:'Absurdly powerful, absurdly priced', icon:iconCrown, color:'#D4A017'},
   {key:'skins', name:'Scanner Skins', desc:'Purely cosmetic - dress up your scanner shell and laser', icon:iconPalette, color:'#E8542E'},
+  {key:'quartermaster', name:'Quartermaster', desc:'Spend Skram Tags earned from Mission encounters', icon:iconCrown, color:'#4E8FD1'},
 ];
 const STORE_CAT_PAGE_SIZE = 6;
 let storeCatPage = 0;
@@ -5606,7 +6051,23 @@ function renderBag(panel){
   const catalog = allItemCatalogs();
   const owned = catalog.filter(it=> (state.inventory[it.key]||0)>0);
   const hasSellable = owned.some(it=>!it.noSell);
-  panel.innerHTML = `<div class="top-bar"><div class="pixel sm">YOUR BAG</div><div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div></div><div class="buttons-row" style="margin-top:0;"><button class="btn tiny yolk full" id="bagBackBtn">Back</button></div><div class="page-bar" id="bagPageBar"></div><div id="bagList"></div>${hasSellable?`<div class="buttons-row" id="bagSellAllRow"><button class="btn tiny coral full" id="bagSellAllBtn">Sell All</button></div>`:''}`;
+  const tags = state.skramTags||{common:0,uncommon:0,rare:0,epic:0,legendary:0};
+  const hasTags = MISSION_TIERS.some(t=>tags[t.key]>0);
+  panel.innerHTML = `<div class="top-bar"><div class="pixel sm">YOUR BAG</div><div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div></div><div class="buttons-row" style="margin-top:0;"><button class="btn tiny yolk full" id="bagBackBtn">Back</button></div>
+    ${hasTags?`<div class="section-label">Skram Tags</div><div id="bagTagsList"></div>`:''}
+    <div class="page-bar" id="bagPageBar"></div><div id="bagList"></div>${hasSellable?`<div class="buttons-row" id="bagSellAllRow"><button class="btn tiny coral full" id="bagSellAllBtn">Sell All</button></div>`:''}`;
+  if(hasTags){
+    document.getElementById('bagTagsList').innerHTML = MISSION_TIERS.filter(t=>tags[t.key]>0).map(t=> `<div class="log-row" style="justify-content:space-between;"><span style="display:flex;align-items:center;gap:4px;">${skramTagSVG(t.color,16)}<span class="log-name">${t.name} x${tags[t.key]}</span></span><button class="btn tiny cream" data-sell-tag="${t.key}">Sell all for ${formatCoins(skramTagSellValue(t.key)*tags[t.key])}</button></div>`).join('');
+    document.getElementById('bagTagsList').querySelectorAll('[data-sell-tag]').forEach(btn=> btn.addEventListener('click', ()=>{
+      const key = btn.dataset.sellTag;
+      const count = state.skramTags[key]||0;
+      const value = skramTagSellValue(key)*count;
+      state.skramTags[key] = 0;
+      addCoins(value); sfxCoin(); saveState();
+      showToast(`Sold for ${formatCoins(value)} coins`);
+      renderBag(panel);
+    }));
+  }
   document.getElementById('bagBackBtn').addEventListener('click', ()=>{ storeCategory=null; renderStore(panel); });
   if(owned.length===0){ document.getElementById('bagList').innerHTML = `<div class="empty-state">BAG EMPTY<br><span style="font-weight:400;font-size:12px;">Buy something from the Store to see it here.</span></div>`; return; }
   if(hasSellable) document.getElementById('bagSellAllBtn').addEventListener('click', ()=>{
@@ -5696,13 +6157,18 @@ function renderStore(panel){
     return;
   }
   const cat = STORE_CATEGORIES.find(c=>c.key===storeCategory);
-  panel.innerHTML = `<div class="top-bar"><div class="pixel sm">${cat.name.toUpperCase()}</div><div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div></div><div class="buttons-row" style="margin-top:0;"><button class="btn tiny yolk full" id="storeBackBtn">Back</button></div><div class="page-bar" id="storeItemPageBar" style="margin-top:4px;"></div><div id="storeItemList"></div>`;
+  const tags = state.skramTags||{common:0,uncommon:0,rare:0,epic:0,legendary:0};
+  const pouchHTML = storeCategory==='quartermaster'
+    ? `<div style="display:flex;gap:5px;align-items:center;">${MISSION_TIERS.map(t=>`<span style="display:flex;align-items:center;gap:1px;">${skramTagSVG(t.color,13)}<span style="font-size:9px;font-family:'Baloo 2',sans-serif;font-weight:700;">${(tags[t.key]||0)>999?Math.floor((tags[t.key]||0)/1000)+'k':(tags[t.key]||0)}</span></span>`).join('')}</div>`
+    : `<div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div>`;
+  panel.innerHTML = `<div class="top-bar"><div class="pixel sm">${cat.name.toUpperCase()}</div>${pouchHTML}</div><div class="buttons-row" style="margin-top:0;"><button class="btn tiny yolk full" id="storeBackBtn">Back</button></div><div class="page-bar" id="storeItemPageBar" style="margin-top:4px;"></div><div id="storeItemList"></div>`;
   document.getElementById('storeBackBtn').addEventListener('click', ()=>{ storeCategory=null; renderStore(panel); });
   const list = document.getElementById('storeItemList');
   if(storeCategory==='specialist'){ renderSpecialist(list, panel); return; }
   if(storeCategory==='boosts'){ renderBoosts(list, panel); return; }
   if(storeCategory==='costumes'){ renderCostumes(list, panel); return; }
   if(storeCategory==='skins'){ renderSkins(list, panel); return; }
+  if(storeCategory==='quartermaster'){ renderQuartermaster(list, panel); return; }
   const CATEGORY_MAP = {
     charms: [UPGRADE_ITEMS.filter(i=>!i.specialist), it=>it.desc],
     weapons: [WEAPON_ITEMS.filter(i=>!i.specialist), it=>`${it.desc} · requires Lv.${it.reqLevel}+ · ${RARITY_STYLE[it.tier].label}`],
@@ -5997,6 +6463,39 @@ function renderBoosts(container, panel){
     });
     if(anyExpired) renderBoosts(container, panel);
   }, 1000);
+}
+const QUARTERMASTER_ITEMS = [
+  {key:'fieldRations', name:'Field Rations', desc:'A modest coin bundle', tierKey:'common', tagCost:3, type:'coins', coins:500},
+  {key:'dogTagChain', name:'Dog Tag Chain', desc:'A wearable necklace of tags - purely cosmetic', tierKey:'uncommon', tagCost:5, type:'costume', costumeKey:'dogTagChain'},
+  {key:'quartermastersKit', name:"Quartermaster's Kit", desc:'A potion plus a modest gear piece', tierKey:'rare', tagCost:4, type:'bundle'},
+  {key:'veteranSash', name:"Veteran's Sash", desc:'Slightly better Mission encounter odds while worn', tierKey:'epic', tagCost:6, type:'costume', costumeKey:'veteranSash'},
+  {key:'explorerRegalia', name:"The Explorer's Regalia", desc:'The full cosmetic set - earned through real combat', tierKey:'legendary', tagCost:10, type:'costume', costumeKey:'explorerRegalia'},
+];
+function renderQuartermaster(container, panel){
+  const tags = state.skramTags||{common:0,uncommon:0,rare:0,epic:0,legendary:0};
+  container.innerHTML = QUARTERMASTER_ITEMS.map(it=>{
+    const tier = MISSION_TIERS.find(t=>t.key===it.tierKey);
+    const owned = it.type==='costume' && (state.inventory[it.costumeKey]||0)>0;
+    const canAfford = (tags[it.tierKey]||0)>=it.tagCost;
+    return `<div class="store-item"><div class="cat-badge" style="background:${tier.color};">${skramTagSVG('#fff',18)}</div><div class="sinfo"><div class="sname">${it.name}</div><div class="sdesc">${it.desc}</div></div><button class="btn tiny ${owned?'cream':'yolk'} full" data-qm-buy="${it.key}" style="flex:none;width:auto;padding:6px 10px;" ${owned||!canAfford?'disabled':''}>${owned?'Owned':`${it.tagCost} ${tier.name}`}</button></div>`;
+  }).join('');
+  container.querySelectorAll('[data-qm-buy]').forEach(btn=> btn.addEventListener('click', ()=>{
+    const it = QUARTERMASTER_ITEMS.find(q=>q.key===btn.dataset.qmBuy);
+    if((state.skramTags[it.tierKey]||0)<it.tagCost){ showToast("Not enough Tags"); return; }
+    state.skramTags[it.tierKey] -= it.tagCost;
+    if(it.type==='coins'){ addCoins(it.coins); showToast(`+${formatCoins(it.coins)} coins!`); }
+    else if(it.type==='costume'){ state.inventory[it.costumeKey]=(state.inventory[it.costumeKey]||0)+1; showToast(`${it.name} added to your Bag!`); }
+    else if(it.type==='bundle'){
+      const potion = POTION_ITEMS.filter(p=>!p.specialist)[Math.floor(Math.random()*POTION_ITEMS.filter(p=>!p.specialist).length)];
+      const gearPool = [...WEAPON_ITEMS, ...ARMOR_ITEMS].filter(g=>g.tier==='rare');
+      const gear = gearPool[Math.floor(Math.random()*gearPool.length)];
+      state.inventory[potion.key]=(state.inventory[potion.key]||0)+1;
+      if(gear) state.inventory[gear.key]=(state.inventory[gear.key]||0)+1;
+      showToast(`Found ${potion.name}${gear?` and ${gear.name}`:''}!`);
+    }
+    sfxCoin(); saveState();
+    renderQuartermaster(container, panel);
+  }));
 }
 function renderSpecialist(container, panel){
   const pool = [
