@@ -1054,9 +1054,11 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '5.8.4';
+const FIRMWARE_VERSION = '5.9';
 const FIRMWARE_CHANGELOG = [
-  'Final checkpoint of the permanent hue-rotate fix: removed all 13 now-unnecessary reflow-boundary band-aids that were specifically mitigating the old CSS filter, which no longer exists anywhere in the game. One unrelated reflow fix (protecting against a separate modal-stacking bug) was correctly left in place.',
+  'New: real Friend Requests - "Add a Hunter" now sends a request instead of adding them instantly. A Requests section shows anyone waiting on you, with Accept or Decline right there',
+  'The Friends button shows a badge for pending incoming requests, checked whenever you visit Friends',
+  'Social Butterfly now only counts mutual, accepted friendships - not requests still waiting on someone',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -2061,7 +2063,7 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'rankedUp', name:'Ranked Up', desc:'Climb the Hunter Ranks', guide:'Earn Hunter XP by battling to climb the Hunter Rank ladder - check your Profile tab to see how close you are to the next rank.', getValue: ()=> hunterRankIndex(state.hunterXP||0), tiers:[4,8,14,17,21]},
   {key:'fortune', name:'Fortune', desc:'Earn coins (lifetime)', guide:"Earn coins over your lifetime from battles, quests, or selling items - every coin you've ever collected counts, even ones you've since spent.", getValue: ()=> state.stats.lifetimeCoins||0, tiers:[10000,50000,200000,750000,2000000]},
   {key:'legendaryHunter', name:'Legendary Hunter', desc:'Discover Legendaries', guide:'Discover Legendary-rarity Skrambeasts. These are rare finds, so keep scanning a wide variety of barcodes.', getValue: ()=> Object.values(state.almanac).filter(e=>e.rarity==='legendary' && !e.barcode.startsWith('arena-')).length, tiers:[3,15,50,150,400]},
-  {key:'socialButterfly', name:'Social Butterfly', desc:'Add Hunter friends', guide:'Add other players as Hunter friends from the Friends tab using their Hunter Code.', getValue: ()=> (state.friends||[]).length, tiers:[1,3,5,10,20]},
+  {key:'socialButterfly', name:'Social Butterfly', desc:'Make Hunter friends', guide:'Send a friend request from the Friends tab using their Hunter Username, then wait for them to accept it - only mutual, accepted friendships count here.', getValue: ()=> (state.friends||[]).filter(f=>f.status!=='pending').length, tiers:[1,3,5,10,20]},
   {key:'eggHunter', name:'Egg Hunter', desc:'Hatch eggs', guide:'Hatch Eggs you find while scanning - check your Bag for eggs that are ready to hatch.', getValue: ()=> state.stats.eggsHatched||0, tiers:[1,5,15,40,100]},
   {key:'squadBuilder', name:'Squad Builder', desc:'Expand your Squad Space', guide:"Expand your Squad's storage space from the Store to hold more Skrambeasts at once.", getValue: ()=> state.squadPages||1, tiers:[2,4,6,9,12]},
   {key:'veteran', name:'Veteran', desc:'Total battles fought', guide:'Rack up total battles fought - wins or losses both count, and Arena, Queens, and Boss Training all add up.', getValue: ()=> state.stats.totalFights||0, tiers:[50,250,1000,3000,8000]},
@@ -4372,7 +4374,7 @@ function renderSquadTab(panel){
     <div class="buttons-row" style="margin-top:0;">
       <button class="btn ${squadSubView==='profile'?'yolk':'cream'} small" id="squadModeProfile">PROFILE</button>
       <button class="btn ${squadSubView==='squad'?'yolk':'cream'} small" id="squadModeSquad">SQUAD</button>
-      <button class="btn ${squadSubView==='friends'?'yolk':'cream'} small" id="squadModeFriends">FRIENDS</button>
+      <button class="btn ${squadSubView==='friends'?'yolk':'cream'} small" id="squadModeFriends" style="position:relative;">FRIENDS${friendRequestBadgeCount>0?`<span class="tab-badge" style="display:flex;">${Math.min(9,friendRequestBadgeCount)}</span>`:''}</button>
     </div>
     <div id="squadInner" style="margin-top:10px;"></div>`;
   document.getElementById('squadModeProfile').addEventListener('click', ()=>{ squadSubView='profile'; renderSquadTab(panel); });
@@ -4763,6 +4765,95 @@ function ensurePlayerId(){
 }
 // Resolves a typed username to the stable player ID behind it, via the username:<name> index -
 // returns null if nobody has published under that username.
+async function sendFriendRequest(targetId, targetName){
+  const myId = ensurePlayerId();
+  const entry = { senderId: myId, senderName: state.hunterName||'Hunter', timestamp: Date.now() };
+  if(HAS_CLAUDE_STORAGE){ try{ await window.storage.set(`friendReq:${targetId}:${myId}`, JSON.stringify(entry), true); return true; }catch(e){ return false; } }
+  if(HAS_FIREBASE){
+    try{ const res = await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(targetId)}/${firebaseSafeKey(myId)}.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry) }); return res.ok; }
+    catch(e){ return false; }
+  }
+  return false;
+}
+async function listIncomingFriendRequests(){
+  const myId = ensurePlayerId();
+  if(HAS_CLAUDE_STORAGE){
+    try{
+      const res = await window.storage.list(`friendReq:${myId}:`, true);
+      if(!res || !res.keys) return [];
+      const reqs = await Promise.all(res.keys.map(async k=>{
+        try{ const r = await window.storage.get(k, true); return r ? JSON.parse(r.value) : null; }catch(e){ return null; }
+      }));
+      return reqs.filter(Boolean);
+    }catch(e){ return []; }
+  }
+  if(HAS_FIREBASE){
+    try{
+      const res = await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(myId)}.json`);
+      if(!res.ok) return [];
+      const data = await res.json();
+      if(!data) return [];
+      return Object.values(data).filter(Boolean);
+    }catch(e){ return []; }
+  }
+  return [];
+}
+async function acceptFriendRequest(senderId, senderName){
+  const myId = ensurePlayerId();
+  if(!state.friends) state.friends=[];
+  if(!state.friends.some(f=>f.playerId===senderId)){ state.friends.push({playerId:senderId, status:'accepted'}); }
+  saveState(); checkAchievements();
+  const markerEntry = { accepterName: state.hunterName||'Hunter', timestamp: Date.now() };
+  if(HAS_CLAUDE_STORAGE){
+    try{ await window.storage.delete(`friendReq:${myId}:${senderId}`, true); }catch(e){}
+    try{ await window.storage.set(`friendAcceptedBy:${senderId}:${myId}`, JSON.stringify(markerEntry), true); }catch(e){}
+    return;
+  }
+  if(HAS_FIREBASE){
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(myId)}/${firebaseSafeKey(senderId)}.json`, { method:'DELETE' }); }catch(e){}
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/friendAcceptedBy/${firebaseSafeKey(senderId)}/${firebaseSafeKey(myId)}.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(markerEntry) }); }catch(e){}
+  }
+}
+async function declineFriendRequest(senderId){
+  const myId = ensurePlayerId();
+  if(HAS_CLAUDE_STORAGE){ try{ await window.storage.delete(`friendReq:${myId}:${senderId}`, true); }catch(e){} return; }
+  if(HAS_FIREBASE){ try{ await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(myId)}/${firebaseSafeKey(senderId)}.json`, { method:'DELETE' }); }catch(e){} }
+}
+async function checkFriendAcceptedMarkers(){
+  const myId = ensurePlayerId();
+  let entries = []; // each: {accepterId, val}
+  if(HAS_CLAUDE_STORAGE){
+    try{
+      const res = await window.storage.list(`friendAcceptedBy:${myId}:`, true);
+      if(res && res.keys){
+        const fetched = await Promise.all(res.keys.map(async k=>{
+          try{ const r = await window.storage.get(k, true); return r ? {accepterId:k.split(':')[2], key:k, val:JSON.parse(r.value)} : null; }catch(e){ return null; }
+        }));
+        entries = fetched.filter(Boolean);
+      }
+    }catch(e){}
+  } else if(HAS_FIREBASE){
+    try{
+      const res = await fetch(`${FIREBASE_DB_URL}/shared/friendAcceptedBy/${firebaseSafeKey(myId)}.json`);
+      if(res.ok){
+        const data = await res.json();
+        if(data) entries = Object.keys(data).map(k=>({accepterId:k, val:data[k]}));
+      }
+    }catch(e){}
+  }
+  if(entries.length===0) return false;
+  let anyUpgraded = false;
+  if(!state.friends) state.friends=[];
+  for(const entry of entries){
+    const existing = state.friends.find(f=>f.playerId===entry.accepterId);
+    if(existing){ if(existing.status==='pending'){ existing.status='accepted'; anyUpgraded=true; } }
+    else { state.friends.push({playerId:entry.accepterId, status:'accepted'}); anyUpgraded=true; }
+    if(HAS_CLAUDE_STORAGE){ try{ await window.storage.delete(entry.key, true); }catch(e){} }
+    else if(HAS_FIREBASE){ try{ await fetch(`${FIREBASE_DB_URL}/shared/friendAcceptedBy/${firebaseSafeKey(myId)}/${firebaseSafeKey(entry.accepterId)}.json`, {method:'DELETE'}); }catch(e){} }
+  }
+  if(anyUpgraded){ saveState(); checkAchievements(); }
+  return anyUpgraded;
+}
 async function resolveUsernameToPlayerId(username){
   try{
     const res = await storageGet('username:'+username, true);
@@ -4880,6 +4971,7 @@ async function fetchAllHunterProfiles(){
   return [];
 }
 let friendsBoardMode = 'friends';
+let friendRequestBadgeCount = 0;
 let globalPeriod = 'alltime';
 let globalPage = 0;
 const GLOBAL_PAGE_SIZE = 10;
@@ -4904,6 +4996,7 @@ function renderFriendsList(container){
     </div>
     <div class="page-bar" id="globalPageBar" style="margin-top:6px;"></div>
     <div id="leaderboardInner"><div class="hint">Loading...</div></div>` : `
+    <div id="friendReqInner"></div>
     <div class="section-label" style="margin-top:6px;">Add a Hunter</div>
     <div class="manual-row"><input id="addHunterInput" placeholder="Enter Username" style="flex:1;border-radius:10px;border:2px solid #0d2027;padding:9px;box-sizing:border-box;font-size:12px;"><button class="btn yolk small" id="addHunterBtn">Add</button></div>
     <div class="section-label" style="margin-top:12px;">Friends</div>
@@ -4925,14 +5018,40 @@ function renderFriendsList(container){
     try{
       const targetId = await resolveUsernameToPlayerId(target);
       if(!targetId){ showToast("No hunter found with that username - ask them to open Friends first"); return; }
-      if((state.friends||[]).some(f=> f.playerId===targetId || f.code===target)){ showToast("Already friends"); return; }
+      if((state.friends||[]).some(f=> f.playerId===targetId || f.code===target)){ showToast("Already friends, or a request is already pending"); return; }
+      const sent = await sendFriendRequest(targetId, target);
+      if(!sent){ showToast("Couldn't reach that hunter right now"); return; }
       if(!state.friends) state.friends=[];
-      state.friends.push({playerId:targetId}); saveState(); checkAchievements();
-      showToast("Hunter added!");
+      state.friends.push({playerId:targetId, status:'pending'}); saveState();
+      showToast("Friend request sent!");
       loadFriendsList();
     }catch(e){ showToast("Couldn't reach that hunter right now"); }
   });
+  loadFriendRequests();
   loadFriendsList();
+  async function loadFriendRequests(){
+    const reqInner = document.getElementById('friendReqInner');
+    if(!reqInner) return;
+    const upgraded = await checkFriendAcceptedMarkers();
+    if(currentTab!=='collection') return; // left the tab while this was in flight
+    if(upgraded) loadFriendsList();
+    const incoming = await listIncomingFriendRequests();
+    if(currentTab!=='collection') return;
+    friendRequestBadgeCount = incoming.length;
+    const friendsBtn = document.getElementById('squadModeFriends');
+    if(friendsBtn) friendsBtn.innerHTML = `FRIENDS${friendRequestBadgeCount>0?`<span class="tab-badge" style="display:flex;">${Math.min(9,friendRequestBadgeCount)}</span>`:''}`;
+    if(incoming.length===0){ reqInner.innerHTML=''; return; }
+    reqInner.innerHTML = `<div class="section-label">Requests</div>` + incoming.map(r=> `<div class="log-row" style="justify-content:space-between;"><span class="log-name">${escapeHtml(r.senderName)}</span><span style="display:flex;gap:4px;"><button class="btn tiny coral" data-accept="${r.senderId}" data-name="${escapeHtml(r.senderName)}">Accept</button><button class="btn tiny cream" data-decline="${r.senderId}">Decline</button></span></div>`).join('');
+    reqInner.querySelectorAll('[data-accept]').forEach(btn=> btn.addEventListener('click', async ()=>{
+      await acceptFriendRequest(btn.dataset.accept, btn.dataset.name);
+      showToast(`You're now friends with ${btn.dataset.name}!`);
+      loadFriendRequests(); loadFriendsList();
+    }));
+    reqInner.querySelectorAll('[data-decline]').forEach(btn=> btn.addEventListener('click', async ()=>{
+      await declineFriendRequest(btn.dataset.decline);
+      loadFriendRequests();
+    }));
+  }
   async function loadFriendsList(){
     const listEl = document.getElementById('friendsListInner');
     const me = myPublicProfile(); me.isMe = true;
@@ -4956,7 +5075,7 @@ function renderFriendsList(container){
             if(res&&res.value) profile=JSON.parse(res.value);
           }
         }catch(e){}
-        friendRows.push({code:f.code||(profile&&profile.name), playerId:f.playerId||null, profile});
+        friendRows.push({code:f.code||(profile&&profile.name), playerId:f.playerId||null, profile, status:f.status||'accepted'});
       }
       if(upgraded) saveState();
     }
@@ -5019,6 +5138,7 @@ function renderFriendsList(container){
       .map((r,i)=>{
         if(!r.profile) return `<div class="log-row" style="justify-content:space-between;"><span class="log-name">${escapeHtml(r.code)}</span><span class="hint">Not found</span></div>`;
         const pr = r.profile;
+        if(r.status==='pending') return `<div class="log-row" style="justify-content:space-between;"><span class="log-name">${escapeHtml(pr.name)}</span><span class="hint">Request sent</span></div>`;
         const online = (Date.now()-(pr.lastSeen||0)) < ONLINE_MS;
         return `<div class="log-row" style="justify-content:space-between;cursor:pointer;" data-friend-idx="${i}">
           <span class="log-name">${escapeHtml(pr.name)}</span>
