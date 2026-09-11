@@ -580,6 +580,7 @@ function achievementIcon(key){
     case 'hiveFullyStocked': return `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="4" width="7" height="7" fill="#fff"/><rect x="13" y="4" width="7" height="7" fill="#fff" opacity=".7"/><rect x="4" y="13" width="7" height="7" fill="#fff" opacity=".7"/><rect x="13" y="13" width="7" height="7" fill="#fff" opacity=".4"/></svg>`;
     case 'royalCourt': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 18h16l-1.5-9-4 4-2.5-6-2.5 6-4-4L4 18z" fill="#fff"/></svg>`;
     case 'pvpDuelist': return iconSkull('#fff', 20);
+    case 'raidSlayer': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 18h16l-1.5-9-4 4-2.5-6-2.5 6-4-4L4 18z" fill="#fff"/></svg>`;
     default: return '';
   }
 }
@@ -870,8 +871,13 @@ function showDailyLoginPopup(streak, todayKey){
 async function loadState(){
   const defaultStats = state.stats, defaultSettings = state.settings, defaultDailyLogin = state.dailyLogin, defaultScannerCustomization = state.scannerCustomization;
   try{
-    const res = await storageGet('scannimals-state', false);
+    const res = await storageGet('skrambeasts-state', false);
     if(res && res.value){ state = Object.assign(state, JSON.parse(res.value)); }
+    else{
+      // one-time migration for existing testers saved under the old pre-rename key name
+      const legacy = await storageGet('scannimals-state', false);
+      if(legacy && legacy.value){ state = Object.assign(state, JSON.parse(legacy.value)); }
+    }
   }catch(e){ /* first run */ }
   state.stats = Object.assign({}, defaultStats, state.stats||{}); // preserve new fields on old saves
   state.settings = Object.assign({}, defaultSettings, state.settings||{});
@@ -935,7 +941,7 @@ function setupEasterEgg2Triggers(){
   });
 }
 async function saveState(){
-  try{ await storageSet('scannimals-state', JSON.stringify(state), false); }
+  try{ await storageSet('skrambeasts-state', JSON.stringify(state), false); }
   catch(e){ console.warn('save failed', e); }
 }
 
@@ -1014,9 +1020,9 @@ const RARITY_STYLE = {
   legendary:{label:'LEGENDARY', color:'#D4A017', mult:3.6}
 };
 const RARITY_ORDER = ['common','uncommon','rare','epic','legendary'];
-const FIRMWARE_VERSION = '4.2';
+const FIRMWARE_VERSION = '5.2';
 const FIRMWARE_CHANGELOG = [
-  'Line Up now pages at 15 hunters at a time, sorted by most recently active - previously it had no cap at all and would render everyone in one unbroken list',
+  'Internal rename: the save file itself moved from the old scannimals-state key to skrambeasts-state - existing saves migrate over automatically on first load, nothing lost',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -2053,6 +2059,7 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'hiveRegular', name:'Checkpoint Regular', desc:'Reach Hive checkpoints', guide:'Every 25 kills in The Hive triggers a checkpoint - reach enough of them, across as many runs as it takes.', getValue: ()=> state.stats.hiveCheckpointsReached||0, tiers:[1,5,20,50,150]},
   {key:'royalCourt', name:'Royal Court', desc:'Capture wild Queens', guide:'Buy a Smoker from the Scanner section of the Store, then defeat a wild Queen while holding one and select it when the capture option appears. The top tier means enough Queens for a full squad of 5.', getValue: ()=> state.stats.queensCaptured||0, tiers:[1,2,3,4,5]},
   {key:'pvpDuelist', name:'Duelist', desc:'Win Player VS Player battles', guide:'Pair with another hunter under Player VS Player and win a duel. Win streaks earn you a skull badge visible to your opponent, starting at 3 wins in a row.', getValue: ()=> state.stats.pvpWins||0, tiers:[1,10,30,75,150]},
+  {key:'raidSlayer', name:'Raid Slayer', desc:'Defeat Queens in a co-op Raid', guide:'Start or join a Queen Raid from the Line Up - a shared, much tougher Queen that a whole party of up to 5 fights together. Everyone present when she falls gets their own rewards.', getValue: ()=> state.stats.raidQueensDefeated||0, tiers:[1,5,15,30,50]},
   {key:'globalAce', name:'Global Ace', desc:"Rank on the Global leaderboard", guide:"Open Friends > Global to see how you stack up against every hunter, not just your friends. Earning more Hunter XP climbs you higher - the top 20 make the board at all.", getValue: ()=> state.stats.bestGlobalRank ? Math.max(0, 21-state.stats.bestGlobalRank) : 0, tiers:[1,11,16,18,20]},
 ];
 function achievementsUnlockedCount(){
@@ -3652,6 +3659,23 @@ function generateHiveQueen(wave){
   boss.isBoss = true;
   return boss;
 }
+function raidHpMultiplier(partySize){ return 1 + (Math.max(1,partySize)-1)*0.75; }
+function generateRaidQueen(partySize){
+  const barcode = 'raidqueen-'+Date.now()+'-'+Math.floor(Math.random()*100000);
+  const boss = generateMonster(barcode, 'legendary', 145);
+  boss.xp = 0;
+  boss.traits = Object.assign({}, boss.traits, {eyes:'sharp'});
+  boss.weapon = 'skybreakerFang';
+  boss.armor = 'gildedRoyalArmor';
+  recomputeStats(boss);
+  boss.stats.hp = Math.round(boss.stats.hp * 6 * raidHpMultiplier(partySize));
+  boss.stats.power = Math.round(boss.stats.power * 1.8);
+  boss.stats.guard = Math.round(boss.stats.guard * 1.6);
+  boss.name = 'Queen '+boss.name;
+  boss.defaultName = boss.name;
+  boss.isBoss = true;
+  return boss;
+}
 function applyHiveOpponentGear(opponent, wave){
   if(wave<50) return; // no gear before this point - keeps the early game clean
   const gearChance = Math.min(0.6, Math.max(0, (wave-50)/300));
@@ -3802,12 +3826,31 @@ function startHiveRun(fighter, container){
     let selectedItem = null;
     state.stats.hiveCheckpointsReached = (state.stats.hiveCheckpointsReached||0)+1; // reaching the checkpoint is the event, regardless of what gets picked here
     saveState(); checkAchievements();
+    const checkpointNumber = kills / HIVE_CHECKPOINT_INTERVAL;
+    const offerXpAd = checkpointNumber % 2 === 1; // alternates: checkpoint 1 offers XP, 2 offers Coins, 3 back to XP, etc.
+    const adKind = offerXpAd ? 'xp' : 'coin';
+    const adBoostActive = state.activeBoosts && state.activeBoosts[adKind] && Date.now()<state.activeBoosts[adKind].expiresAt;
     container.innerHTML = `
       <div class="pixel md" style="text-align:center;">Checkpoint - ${kills} kills!</div>
       <div class="hint" style="text-align:center;">Pick one free bonus for your next stretch of waves:</div>
       <div id="hiveShopList" style="margin-top:6px;"></div>
+      <div class="store-item" style="margin-top:6px;"><div class="cat-badge" style="background:#3f9142;">AD</div><div class="sinfo"><div class="sname">Watch Ad for x2 ${offerXpAd?'XP':'Coins'}</div><div class="sdesc">${offerXpAd?'Doubles XP for your whole squad':'Doubles coins earned'} - 2 minutes${adBoostActive?' · already running':''}</div></div><button class="btn tiny yolk" id="hiveCheckpointAdBtn" style="font-size:11px;padding:6px 10px;" ${adBoostActive?'disabled':''}>Watch Ad</button></div>
       <div class="buttons-row"><button class="btn yolk small full" id="hiveContinueBtn">Continue Battle</button></div>
       <div class="buttons-row"><button class="btn yolk small full" id="hiveExitBtn">Exit Hive</button></div>`;
+    if(!adBoostActive){
+      document.getElementById('hiveCheckpointAdBtn').addEventListener('click', function(){
+        const btn = this;
+        showRewardedAd(()=>{
+          if(!state.activeBoosts) state.activeBoosts={};
+          state.activeBoosts[adKind] = { key: offerXpAd?'hiveCheckpointXpBoost':'hiveCheckpointCoinBoost', mult:2, expiresAt: Date.now()+2*60000 };
+          saveState(); sfxCoin();
+          showToast(`x2 ${offerXpAd?'XP':'Coins'} boost activated!`);
+          btn.disabled = true;
+          const descEl = btn.parentElement.querySelector('.sdesc');
+          if(descEl) descEl.textContent = `${offerXpAd?'Doubles XP for your whole squad':'Doubles coins earned'} - 2 minutes · already running`;
+        });
+      });
+    }
     const listEl = document.getElementById('hiveShopList');
     listEl.innerHTML = HIVE_SHOP_ITEMS.map(it=> `<div class="store-item" data-shop-key="${it.key}" style="cursor:pointer;"><div style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;">${it.icon()}</div><div class="sinfo"><div class="sname">${it.name}</div><div class="sdesc">${it.desc}</div></div><button class="btn tiny cream" data-info-key="${it.key}" style="padding:3px 7px;">ⓘ</button></div>`).join('');
     listEl.querySelectorAll('[data-shop-key]').forEach(el=>{
@@ -4110,6 +4153,7 @@ function switchTab(name){
   if(wildBattleLocked && name!=='scan'){ showToast("Finish the fight before switching tabs!"); return; }
   if(nearbyDuelInProgress && name!=='versus'){ showToast("Finish the fight before switching tabs!"); return; }
   if(hiveRunActive && name!=='versus'){ showToast("Finish or exit your Hive run before switching tabs!"); return; }
+  if(raidBattleInProgress && name!=='versus'){ showToast("Finish the raid fight before switching tabs!"); return; }
   currentTab = name;
   document.body.classList.toggle('vs-tab-active', name==='versus');
   document.querySelectorAll('.tab').forEach(t=> t.classList.toggle('active', t.dataset.tab===name));
@@ -4194,6 +4238,10 @@ function renderCollection(panel){
 // Rebuilds only the tile grid (not the header/filters/page-bar) - used after a favorite
 // toggle so the shimmer animation on holo tiles doesn't restart across the whole page.
 function renderSquadGrid(panel){
+  document.querySelectorAll('.modal-overlay').forEach(el=>{
+    if(el._boostTimerInterval) clearInterval(el._boostTimerInterval);
+    el.remove();
+  });
   const filtered = squadFilter==='all' ? state.collection : squadFilter==='queen' ? state.collection.filter(m=>m.isBoss) : state.collection.filter(m=>m.rarity===squadFilter && !m.isBoss);
   const sorted = [...filtered].sort((a,b)=>{
     const favDiff = (b.favorite?1:0)-(a.favorite?1:0); if(favDiff) return favDiff;
@@ -4245,7 +4293,10 @@ function releaseMonster(id){
 /* ---- Detail modal ---- */
 function closeDetailModal(overlay){
   if(overlay._boostTimerInterval) clearInterval(overlay._boostTimerInterval);
-  overlay.remove();
+  document.querySelectorAll('.modal-overlay').forEach(el=>{
+    if(el._boostTimerInterval) clearInterval(el._boostTimerInterval);
+    el.remove();
+  });
   document.body.style.overflow = '';
   void document.body.offsetHeight; // forces a clean repaint boundary before the next DOM rebuild - see comment on the reported static/interlace glitch
   const panel = document.getElementById('panel');
@@ -4253,8 +4304,10 @@ function closeDetailModal(overlay){
   else renderTab();
 }
 function openDetailModal(m, editable, allowEquip){
-  const stale = document.querySelector('.modal-overlay');
-  if(stale){ if(stale._boostTimerInterval) clearInterval(stale._boostTimerInterval); stale.remove(); }
+  document.querySelectorAll('.modal-overlay').forEach(el=>{
+    if(el._boostTimerInterval) clearInterval(el._boostTimerInterval);
+    el.remove();
+  });
   if(allowEquip===undefined) allowEquip = true;
   const rs = RARITY_STYLE[m.rarity];
   const overlay = document.createElement('div');
@@ -5161,7 +5214,8 @@ function renderStatsPanel(container, panel){
         ${row('Ties', s.pvpTies||0, '#9B5DE5')}
         ${row('Current Win Streak', s.pvpCurrentStreak||0, '#D4A017')}
         ${row('Best Win Streak', s.pvpBestStreak||0, '#D4A017')}
-        ${curTier ? `<div class="log-row"><div class="log-info"><div class="log-name">Current Skull</div></div><div class="log-status" style="background:${curTier.color};display:flex;align-items:center;gap:4px;">${curTier.name}</div></div>` : ''}`;
+        ${curTier ? `<div class="log-row"><div class="log-info"><div class="log-name">Current Skull</div></div><div class="log-status" style="background:${curTier.color};display:flex;align-items:center;gap:4px;">${curTier.name}</div></div>` : ''}
+        ${row('Queen Raids Won', s.raidQueensDefeated||0, '#D4A017')}`;
     }
   ];
   const totalPages = pages.length;
@@ -5210,7 +5264,10 @@ let bagPage = 0;
 let storeItemPage = 0;
 const BAG_PAGE_SIZE = 5;
 function allItemCatalogs(){
-  return [...UPGRADE_ITEMS, ...WEAPON_ITEMS, ...ARMOR_ITEMS, ...SHIELD_ITEMS, ...CAPTURE_ITEMS, ...POTION_ITEMS, ...COSTUME_ITEMS, ...PARTY_HAT_TIERS, ...SPECIALIST_EXTRA];
+  const combined = [...UPGRADE_ITEMS, ...WEAPON_ITEMS, ...ARMOR_ITEMS, ...SHIELD_ITEMS, ...CAPTURE_ITEMS, ...POTION_ITEMS, ...COSTUME_ITEMS, ...PARTY_HAT_TIERS, ...SPECIALIST_EXTRA];
+  const byKey = new Map();
+  combined.forEach(it=> byKey.set(it.key, it)); // later entries win - PARTY_HAT_TIERS' real pricing overrides COSTUME_ITEMS' cost:0 placeholders for the same keys
+  return [...byKey.values()];
 }
 function renderBag(panel){
   const catalog = allItemCatalogs();
@@ -6111,7 +6168,7 @@ function renderArena(container){
       const el = rosterEl.querySelector(`[data-fighter-id="${m.id}"]`);
       return el && el.classList.contains('tired') !== isTired(m);
     });
-    if(anyMismatch) renderArena(container); // someone just finished resting - full refresh restores their icon/handlers
+    if(anyMismatch) renderArenaRoster(rosterEl, container); // someone just finished resting - only the roster needs rebuilding, not the whole screen
   }, 1000);
 }
 function trackEasterEgg2ArenaTap(favs, m){
@@ -6396,6 +6453,15 @@ function renderVersus(panel){
     renderLineup(document.getElementById('lineupHost'), panel);
     return;
   }
+  if(versusCategory==='raidLobby'){
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">QUEEN RAID</div>${backRow}</div><div id="raidHost"></div>`;
+    document.getElementById('vcBack').addEventListener('click', ()=>{
+      if(raidBattleInProgress){ showToast("Finish the raid fight before leaving!"); return; }
+      leaveRaid(); versusCategory='pvpChoice'; renderVersus(panel);
+    });
+    renderRaidLobby(document.getElementById('raidHost'), panel);
+    return;
+  }
   if(versusCategory==='arenaChoice'){
     panel.innerHTML = `<div class="top-bar"><div class="pixel sm">BATTLE ARENA</div>${backRow}</div>
       <div class="section-label" style="margin-top:6px;">Choose your training</div>
@@ -6543,6 +6609,7 @@ async function removeLineupPresence(){
   }
 }
 let lineupPollTimer = null, lineupHeartbeatTimer = null, lineupSeenRequestCode = null;
+let raidCode = null, raidDoc = null, raidPollTimer = null, raidBattleInProgress = false, raidMyTeam = [];
 const LINEUP_PAGE_SIZE = 15;
 let lineupPage = 0;
 function renderLineup(container, panel){
@@ -6568,17 +6635,42 @@ function leaveLineup(){
 async function refreshLineupList(container, panel){
   const myId = ensurePlayerId();
   const all = await listLineup();
+  const openRaids = await listOpenRaids();
   if(currentTab!=='versus' || versusCategory!=='lineup') return; // navigated away while this was in flight
   const STALE_MS = 20000;
   const others = all.filter(e=> e && e.playerId!==myId && (Date.now()-e.timestamp)<STALE_MS)
     .sort((a,b)=> b.timestamp-a.timestamp); // most recently active first
+  const joinableRaids = openRaids.filter(r=> r.hostId!==myId && Object.keys(r.participants||{}).length<RAID_MAX_SIZE);
   const totalPages = Math.max(1, Math.ceil(others.length/LINEUP_PAGE_SIZE));
   lineupPage = Math.min(lineupPage, totalPages-1); // clamp only if now out of range - don't snap back to page 1 on every poll
   const pageItems = others.slice(lineupPage*LINEUP_PAGE_SIZE, lineupPage*LINEUP_PAGE_SIZE+LINEUP_PAGE_SIZE);
   container.innerHTML = `
-    <div class="hint">You're visible to other hunters browsing here right now. Tap someone to challenge them.${others.length>LINEUP_PAGE_SIZE?` (${others.length} here now)`:''}</div>
+    <div class="section-label">Queen Raids</div>
+    <div class="buttons-row" style="margin-top:2px;"><button class="btn coral small full" id="lineupStartRaid">Start a Raid</button></div>
+    <div id="lineupRaidList" style="margin-top:4px;"></div>
+    <div class="section-label" style="margin-top:10px;">Hunters Nearby</div>
+    <div class="hint">Tap someone to challenge them 1-on-1.${others.length>LINEUP_PAGE_SIZE?` (${others.length} here now)`:''}</div>
     <div id="lineupList" style="margin-top:8px;"></div>
     ${others.length>LINEUP_PAGE_SIZE? `<div class="page-bar" id="lineupPageBar" style="margin-top:6px;"></div>` : ''}`;
+  document.getElementById('lineupStartRaid').addEventListener('click', async ()=>{
+    const { code, doc } = createRaidDoc();
+    await saveRaidDoc(code, doc);
+    leaveLineup();
+    versusCategory='raidLobby'; raidCode=code;
+    renderVersus(panel);
+  });
+  const raidListEl = document.getElementById('lineupRaidList');
+  raidListEl.innerHTML = joinableRaids.length
+    ? joinableRaids.map(r=> `<div class="log-row" style="cursor:pointer;" data-join-raid="${escapeHtml(r.code)}"><div class="log-info"><div class="log-name">${escapeHtml((r.participants[r.hostId]||{}).name || 'Hunter')}'s Raid</div></div><div class="log-status" style="background:#D4A017;">${Object.keys(r.participants||{}).length}/${RAID_MAX_SIZE} - Join</div></div>`).join('')
+    : `<div class="hint" style="text-align:center;">No raids forming right now - start one!</div>`;
+  raidListEl.querySelectorAll('[data-join-raid]').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const code = row.dataset.joinRaid;
+      leaveLineup();
+      versusCategory='raidLobby'; raidCode=code;
+      renderVersus(panel);
+    });
+  });
   const listEl = document.getElementById('lineupList');
   if(others.length===0){
     listEl.innerHTML = `<div class="hint" style="text-align:center;padding:16px 0;">Nobody else is here right now - hang tight, or try again later.</div>`;
@@ -6623,6 +6715,327 @@ async function checkForLineupChallenge(panel){
   document.getElementById('lineupReqDecline').addEventListener('click', async ()=>{
     overlay.remove();
     await declineBattleRequest();
+  });
+}
+function randomRaidCode(){ return 'R'+Math.random().toString(36).slice(2,8).toUpperCase(); }
+async function fetchRaidDoc(code){
+  if(HAS_CLAUDE_STORAGE){ try{ const r = await window.storage.get('raid:'+code, true); return r ? JSON.parse(r.value) : null; }catch(e){ return null; } }
+  if(HAS_FIREBASE){
+    try{
+      const res = await fetch(`${FIREBASE_DB_URL}/shared/raids/${firebaseSafeKey(code)}.json`);
+      if(!res.ok) return null;
+      return await res.json();
+    }catch(e){ return null; }
+  }
+  return null;
+}
+async function saveRaidDoc(code, doc){
+  if(HAS_CLAUDE_STORAGE){ try{ await window.storage.set('raid:'+code, JSON.stringify(doc), true); }catch(e){} return; }
+  if(HAS_FIREBASE){
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/raids/${firebaseSafeKey(code)}.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(doc) }); }catch(e){}
+  }
+}
+async function deleteRaidDoc(code){
+  if(HAS_CLAUDE_STORAGE){ try{ await window.storage.delete('raid:'+code, true); }catch(e){} return; }
+  if(HAS_FIREBASE){
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/raids/${firebaseSafeKey(code)}.json`, { method:'DELETE' }); }catch(e){}
+  }
+}
+async function listOpenRaids(){
+  if(HAS_CLAUDE_STORAGE){
+    try{
+      const res = await window.storage.list('raid:', true);
+      if(!res || !res.keys) return [];
+      const docs = await Promise.all(res.keys.map(async k=>{
+        try{ const r = await window.storage.get(k, true); return r ? JSON.parse(r.value) : null; }catch(e){ return null; }
+      }));
+      return docs.filter(d=> d && d.status==='forming');
+    }catch(e){ return []; }
+  }
+  if(HAS_FIREBASE){
+    try{
+      const res = await fetch(`${FIREBASE_DB_URL}/shared/raids.json`);
+      if(!res.ok) return [];
+      const data = await res.json();
+      if(!data) return [];
+      return Object.values(data).filter(d=> d && d.status==='forming');
+    }catch(e){ return []; }
+  }
+  return [];
+}
+const RAID_MAX_SIZE = 5;
+function createRaidDoc(){
+  const myId = ensurePlayerId();
+  const code = randomRaidCode();
+  const doc = {
+    code, hostId: myId, status:'forming', boss:null, maxHp:0,
+    participants: { [myId]: { playerId:myId, name: state.hunterName||'Hunter', present:true, damageDealt:0, fainted:false } },
+    createdAt: Date.now()
+  };
+  return { code, doc };
+}
+function leaveRaid(){
+  clearInterval(raidPollTimer); raidPollTimer = null;
+  if(raidDoc && raidCode){
+    const myId = ensurePlayerId();
+    if(raidDoc.hostId===myId){ deleteRaidDoc(raidCode); } // host leaving before it starts cancels the raid
+    else if(raidDoc.status==='forming' && raidDoc.participants[myId]){ delete raidDoc.participants[myId]; saveRaidDoc(raidCode, raidDoc); }
+  }
+  raidCode = null; raidDoc = null; raidBattleInProgress = false; raidMyTeam = [];
+}
+async function renderRaidLobby(container, panel){
+  if(!raidCode){ container.innerHTML = `<div class="hint">That raid no longer exists.</div>`; return; }
+  let doc = await fetchRaidDoc(raidCode);
+  if(!doc){ container.innerHTML = `<div class="hint">That raid no longer exists - the host may have left.</div><div class="buttons-row"><button class="btn cream small full" id="raidGoneBack">Back</button></div>`; const b=document.getElementById('raidGoneBack'); if(b) b.addEventListener('click', ()=>{ raidCode=null; versusCategory='pvpChoice'; renderVersus(panel); }); return; }
+  const myId = ensurePlayerId();
+  if(doc.status==='forming' && !doc.participants[myId] && Object.keys(doc.participants).length<RAID_MAX_SIZE){
+    doc.participants[myId] = { playerId:myId, name: state.hunterName||'Hunter', present:true, damageDealt:0, fainted:false };
+    await saveRaidDoc(raidCode, doc);
+  }
+  raidDoc = doc;
+  if(doc.status==='active'){ renderRaidBattle(container, panel); return; }
+  if(doc.status==='complete'){ renderRaidResult(container, panel); return; }
+  const isHost = doc.hostId===myId;
+  const participants = Object.values(doc.participants);
+  container.innerHTML = `
+    <div class="hint" style="text-align:center;">Raid code: <b>${escapeHtml(raidCode)}</b> - ${participants.length}/${RAID_MAX_SIZE} joined</div>
+    <div id="raidParticipantList" style="margin-top:6px;"></div>
+    ${isHost
+      ? `<div class="buttons-row" style="margin-top:10px;"><button class="btn coral small full" id="raidStartBtn" ${participants.length<2?'disabled':''}>${participants.length<2?'Need at least 2 to start':'Start Raid'}</button></div>`
+      : `<div class="hint" style="text-align:center;margin-top:10px;">Waiting for the host to start...</div>`}
+    <div class="buttons-row"><button class="btn cream small full" id="raidLeaveBtn">Leave</button></div>`;
+  document.getElementById('raidParticipantList').innerHTML = participants.map(p=> `<div class="log-row"><div class="log-info"><div class="log-name">${escapeHtml(p.name)}${p.playerId===doc.hostId?' (Host)':''}</div></div></div>`).join('');
+  document.getElementById('raidLeaveBtn').addEventListener('click', ()=>{ leaveRaid(); versusCategory='pvpChoice'; renderVersus(panel); });
+  if(isHost){
+    const startBtn = document.getElementById('raidStartBtn');
+    if(startBtn) startBtn.addEventListener('click', async ()=>{
+      if(participants.length<2) return;
+      doc.boss = generateRaidQueen(participants.length);
+      doc.maxHp = doc.boss.stats.hp;
+      doc.status = 'active';
+      await saveRaidDoc(raidCode, doc);
+      raidDoc = doc;
+      renderRaidBattle(container, panel);
+    });
+  }
+  if(!raidPollTimer){
+    raidPollTimer = setInterval(async ()=>{
+      if(!raidCode || raidBattleInProgress){ return; }
+      renderRaidLobby(container, panel);
+    }, 3000);
+  }
+}
+async function renderRaidBattle(container, panel){
+  raidBattleInProgress = true;
+  clearInterval(raidPollTimer); raidPollTimer = null; // the lobby poller's job is done now that the fight has actually started
+  const doc = raidDoc;
+  const boss = doc.boss, maxWHp = doc.maxHp;
+  const myId = ensurePlayerId();
+  const team = favoritedSquad().slice(0,5);
+  if(team.length<5){ showToast("You need 5 favourites to join this raid fight"); leaveRaid(); versusCategory='pvpChoice'; renderVersus(panel); return; }
+  let activeIdx=0;
+  const fighterMaxHp = m=> effectiveStatsWithBuff(m).hp;
+  let fHp = fighterMaxHp(team[0]);
+  const fainted = team.map(()=>false);
+  let myDamageDealt = 0, resolved=false, lastTapAt=0, opponentTimer=null, syncTimer=null, lastHiddenAt=0, autoFighterTimer=null, iAmOut=false;
+
+  container.innerHTML = `
+    <div style="text-align:center;width:100%;">
+      <div class="pixel sm" style="color:#a13a24;">${boss.name}</div>
+      <div class="hp-bar-wrap" style="width:140px;margin:4px auto;"><div class="hp-bar-fill" id="raidHpBar"></div></div>
+      ${specialBarHTML('raidSpecial')}
+      <div class="float" id="raidFighterWrap" style="margin:4px auto;display:flex;justify-content:center;position:relative;">${monsterSVG(boss,90)}</div>
+    </div>
+    <div style="display:flex;justify-content:center;margin:8px auto;"><div class="tap-center" id="raidTapZone"><div class="tap-countdown" id="raidCountdown"></div></div></div>
+    <div class="pixel sm" style="text-align:center;margin-top:4px;">Your Squad</div>
+    <div class="arena-roster" id="raidRoster"></div>
+    <div class="pixel sm" style="text-align:center;margin-top:6px;">Raid Party</div>
+    <div class="arena-roster" id="raidPartyRoster" style="opacity:.8;"></div>
+    <div class="battle-log-label">Battle Log${isMaxHitActive()?' <span style="color:#E8542E;">- MAX HITS ACTIVE</span>':''}</div>
+    <div class="battle-log" id="raidBattleLog"></div>`;
+  const bossBar=document.getElementById('raidHpBar');
+  const logEl=document.getElementById('raidBattleLog'), countdownEl=document.getElementById('raidCountdown'), tapZone=document.getElementById('raidTapZone');
+  const rosterEl=document.getElementById('raidRoster'), partyRosterEl=document.getElementById('raidPartyRoster');
+  const specialCtrl = createSpecialAttackController('raidSpecial', document.getElementById('raidFighterWrap'), ()=>{
+    if(iAmOut||resolved) return;
+    const specialDmg = effectiveStatsWithBuff(team[activeIdx]).power+3;
+    myDamageDealt += specialDmg; addLog(`${team[activeIdx].name} unleashes a special attack for ${specialDmg}!`); sfxCritical();
+    updateSharedBar();
+  });
+
+  function renderRoster(){
+    rosterEl.innerHTML = team.map((m,i)=> `<div class="arena-roster-icon${i===activeIdx?' selected':''}" style="${fainted[i]?'opacity:.3;':''}"><div style="width:26px;height:26px;">${monsterSVG(m,26)}</div><span class="pixel sm">Lv.${m.level}</span></div>`).join('');
+    void document.body.offsetHeight; // forces a clean repaint boundary after building a grid of hue-rotated monster tiles - see the earlier diagnosed GPU-compositor glitch
+  }
+  function renderPartyRoster(){
+    const others = Object.values(doc.participants).filter(p=> p.playerId!==myId && p.present);
+    partyRosterEl.innerHTML = others.length
+      ? others.map(p=> `<div class="arena-roster-icon${p.fainted?'':''}" style="${p.fainted?'opacity:.3;':''}">${p.currentFighter? `<div style="width:26px;height:26px;">${monsterSVG(p.currentFighter,26)}</div>` : `<div style="width:26px;height:26px;"></div>`}<span class="pixel sm">${escapeHtml(p.name)}</span></div>`).join('')
+      : `<div class="hint">No one else here yet.</div>`;
+    void document.body.offsetHeight;
+  }
+  function sharedDamageTotal(){
+    return Object.values(doc.participants).reduce((sum,p)=> sum + (p.playerId===myId ? myDamageDealt : (p.damageDealt||0)), 0);
+  }
+  function updateSharedBar(){
+    const remaining = Math.max(0, maxWHp - sharedDamageTotal());
+    const pct = remaining/maxWHp;
+    bossBar.style.width=(pct*100)+'%'; bossBar.style.background=hpBarColor(pct);
+    if(remaining<=0 && !resolved) finish(true);
+  }
+  function addLog(text){ logEl.innerHTML += text+'<br>'; logEl.scrollTop=logEl.scrollHeight; }
+  function advanceFighter(){
+    fainted[activeIdx]=true;
+    addLog(`${team[activeIdx].name} has fainted!`);
+    const nextIdx = fainted.findIndex(f=>!f);
+    if(nextIdx===-1){
+      iAmOut = true;
+      addLog(`Your whole squad has fainted - you're out, but the raid continues!`);
+      tapZone.style.visibility='hidden';
+      clearInterval(opponentTimer);
+      return;
+    }
+    activeIdx=nextIdx; fHp=fighterMaxHp(team[activeIdx]);
+    renderRoster();
+    addLog(`${team[activeIdx].name} steps up!`);
+  }
+  async function syncMyProgress(){
+    if(!raidCode || resolved) return;
+    const fresh = await fetchRaidDoc(raidCode);
+    if(resolved) return;
+    if(!fresh){ finish(sharedDamageTotal()>=maxWHp); return; } // raid doc gone - resolve locally based on what we know
+    if(fresh.status==='complete'){ doc.participants = fresh.participants; finish(true); return; }
+    if(fresh.status==='wiped'){ doc.participants = fresh.participants; finish(false); return; }
+    if(!fresh.participants[myId]) return; // left or removed
+    fresh.participants[myId].damageDealt = myDamageDealt;
+    fresh.participants[myId].fainted = iAmOut;
+    fresh.participants[myId].currentFighter = iAmOut ? null : { barcode:team[activeIdx].barcode, name:team[activeIdx].name, type:team[activeIdx].type, typeColor:team[activeIdx].typeColor, typeDark:team[activeIdx].typeDark, rarity:team[activeIdx].rarity, holo:team[activeIdx].holo, hueShift:team[activeIdx].hueShift, level:team[activeIdx].level, traits:team[activeIdx].traits, stats:team[activeIdx].stats };
+    doc.participants = fresh.participants; // pick up others' latest too
+    const totalNow = Object.values(fresh.participants).reduce((sum,p)=> sum + (p.playerId===myId ? myDamageDealt : (p.damageDealt||0)), 0);
+    if(totalNow>=maxWHp){ fresh.status='complete'; await saveRaidDoc(raidCode, fresh); if(!resolved) finish(true); return; }
+    const everyonePresent = Object.values(fresh.participants).filter(p=>p.present);
+    if(everyonePresent.length>0 && everyonePresent.every(p=> p.playerId===myId ? iAmOut : p.fainted)){
+      fresh.status='wiped'; await saveRaidDoc(raidCode, fresh); if(!resolved) finish(false); return;
+    }
+    await saveRaidDoc(raidCode, fresh);
+    if(resolved) return;
+    renderPartyRoster();
+    updateSharedBar();
+  }
+  function finish(won){
+    if(resolved) return; resolved=true;
+    clearInterval(opponentTimer); clearInterval(autoFighterTimer); clearInterval(syncTimer);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    tapZone.removeEventListener('click', onTap);
+    tapZone.style.visibility='hidden';
+    raidBattleInProgress = false;
+    team.forEach(m=> m.buffNextBattle=null);
+    resolveRaidBattle(won, myDamageDealt, container, panel);
+  }
+  function opponentTick(){
+    if(resolved || iAmOut) return;
+    const fighter=team[activeIdx], fs=effectiveStats(fighter);
+    const armor = fighter.armor? ARMOR_ITEMS.find(a=>a.key===fighter.armor):null;
+    const dmg = Math.max(1, Math.round(boss.stats.power - fs.guard*0.35 + (Math.random()*8-4)));
+    fHp -= dmg; sfxHit();
+    addLog(`${boss.name} hits ${fighter.name} for ${dmg}.`);
+    if(armor && Math.random()<armor.recoil){ myDamageDealt+=Math.max(1,Math.round(dmg*0.4)); addLog(`${fighter.name}'s armour counters!`); updateSharedBar(); }
+    if(fHp<=0) advanceFighter();
+  }
+  function onTap(){
+    if(resolved || iAmOut) return;
+    const now=Date.now(); if(now-lastTapAt<TAP_MIN_GAP_MS) return; lastTapAt=now;
+    const fs=effectiveStatsWithBuff(team[activeIdx]);
+    let dmg = Math.max(1, Math.round(fs.power*0.28 - boss.stats.guard*0.12 + (isMaxHitActive()?2:Math.random()*2)));
+    const typeMult = typeMatchupMultiplier(team[activeIdx].type, boss.type);
+    dmg = Math.round(dmg*typeMult);
+    myDamageDealt += dmg; sfxHit();
+    specialCtrl.registerHit();
+    addLog(`${team[activeIdx].name} hits ${boss.name} for ${dmg}.${typeMult>1?' Super effective!':typeMult<1?' Not very effective.':''}`);
+    tapZone.classList.remove('tap-pulse'); void tapZone.offsetWidth; tapZone.classList.add('tap-pulse');
+    updateSharedBar();
+  }
+  function onVisibilityChange(){
+    if(document.hidden){ lastHiddenAt=Date.now(); }
+    else if(lastHiddenAt && !resolved && !iAmOut){
+      const interval = opponentTickInterval(boss);
+      const ticks = Math.floor((Date.now()-lastHiddenAt)/interval);
+      if(ticks>0){ addLog(`(While away, she landed ${ticks} hit${ticks>1?'s':''}.)`); for(let i=0;i<ticks && !resolved && !iAmOut;i++) opponentTick(); }
+      lastHiddenAt=0;
+    }
+  }
+  renderRoster(); renderPartyRoster(); updateSharedBar();
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  syncTimer = setInterval(syncMyProgress, 1500);
+  battleCountdownActive = true;
+  const steps=['3','2','1','TAP!']; let si=0;
+  const showStep=()=>{
+    if(si>=steps.length){
+      countdownEl.textContent='';
+      battleCountdownActive = false;
+      tapZone.addEventListener('click', onTap);
+      autoFighterTimer = maybeStartAutoFighter(onTap);
+      opponentTimer = setInterval(opponentTick, Math.max(550, opponentTickInterval(boss)));
+      return;
+    }
+    countdownEl.textContent=steps[si];
+    countdownEl.classList.remove('cd-pop'); void countdownEl.offsetWidth; countdownEl.classList.add('cd-pop');
+    si++; setTimeout(showStep,750);
+  };
+  showStep();
+}
+async function resolveRaidBattle(won, myDamage, container, panel){
+  const doc = raidDoc;
+  const boss = doc ? doc.boss : null;
+  if(!won || !boss){
+    container.innerHTML = `<div class="pixel md" style="text-align:center;color:#a13a24;">The raid has ended.</div><div class="hint" style="text-align:center;">Better luck next time.</div><div class="buttons-row"><button class="btn yolk small full" id="raidEndBackBtn">Back to Battle Tab</button></div>`;
+    const b = document.getElementById('raidEndBackBtn');
+    if(b) b.addEventListener('click', ()=>{ leaveRaid(); versusCategory='menu'; renderVersus(panel); });
+    return;
+  }
+  const coinReward = coinsForRarity('legendary')*44;
+  const xpPerMember = Math.round(xpReward(boss.level,'legendary')*3.3);
+  favoritedSquad().slice(0,5).forEach(m=> grantXP(m, xpPerMember));
+  addCoins(coinReward);
+  const lootPool = [...WEAPON_ITEMS, ...ARMOR_ITEMS, ...UPGRADE_ITEMS].filter(i=>!i.specialist);
+  const items = [lootPool[Math.floor(Math.random()*lootPool.length)], lootPool[Math.floor(Math.random()*lootPool.length)]];
+  items.forEach(it=>{ state.inventory[it.key]=(state.inventory[it.key]||0)+1; });
+  const presentCount = Math.max(1, Object.values(doc.participants||{}).filter(p=>p.present).length);
+  const crownChance = Math.min(1, 0.20*(RAID_MAX_SIZE/presentCount));
+  const crownDropped = Math.random()<crownChance;
+  if(crownDropped){ state.inventory.queensCrown=(state.inventory.queensCrown||0)+1; state.stats.crownsLifetime=(state.stats.crownsLifetime||0)+1; }
+  state.stats.raidQueensDefeated = (state.stats.raidQueensDefeated||0)+1;
+  logAlmanacBoss(boss, 'kept');
+  saveState(); checkAchievements();
+  leaveRaid();
+  container.innerHTML = `<div class="pixel md" style="text-align:center;color:#3f9142;">Queen Defeated!</div><div class="hint" style="text-align:center;">The party brought her down together.</div>`;
+  showRaidLootReveal(coinReward, xpPerMember, items, crownDropped, panel);
+}
+function showRaidLootReveal(coinReward, xpPerMember, items, crownDropped, panel){
+  const preOverlay = document.createElement('div'); preOverlay.className='modal-overlay';
+  preOverlay.innerHTML = `<div class="modal-box" style="max-width:280px;text-align:center;">
+    <div class="float" style="margin:8px auto;">${hessianBagSVG(110)}</div>
+    <div class="pixel sm">A Bag of Various Items was left behind.</div>
+    <div class="buttons-row"><button class="btn yolk small full" id="raidBagOpenBtn">Open Bag</button></div>
+  </div>`;
+  document.body.appendChild(preOverlay);
+  document.getElementById('raidBagOpenBtn').addEventListener('click', ()=>{
+    preOverlay.remove();
+    whiteFlash(()=>{
+      const rows = [];
+      rows.push(`<div class="log-row"><div class="log-info"><div class="log-name">Coins</div></div><div class="log-status" style="background:#D4A017;">+${formatCoins(coinReward)}</div></div>`);
+      rows.push(`<div class="log-row"><div class="log-info"><div class="log-name">XP (each)</div></div><div class="log-status" style="background:#9B5DE5;">+${xpPerMember}</div></div>`);
+      items.forEach(it=>{ rows.push(`<div class="log-row"><div class="log-info"><div class="log-name">${it.name}</div></div><div class="log-status" style="background:#8FA998;">x1</div></div>`); });
+      if(crownDropped) rows.push(`<div class="log-row"><div class="log-info"><div class="log-name">Queen's Crown</div></div><div class="log-status" style="background:#D4A017;">Found!</div></div>`);
+      const lootOverlay = document.createElement('div'); lootOverlay.className='modal-overlay';
+      lootOverlay.innerHTML = `<div class="modal-box" style="max-width:320px;">
+        ${celebrationHTML(true,'RAID LOOT!')}
+        <div style="max-height:320px;overflow-y:auto;margin-top:6px;">${rows.join('')}</div>
+        <div class="buttons-row"><button class="btn yolk small full" id="raidLootCloseBtn">Amazing!</button></div>
+      </div>`;
+      document.body.appendChild(lootOverlay);
+      document.getElementById('raidLootCloseBtn').addEventListener('click', ()=>{ lootOverlay.remove(); versusCategory='menu'; renderVersus(document.getElementById('panel')); });
+    });
   });
 }
 async function checkIncomingBattleRequest(){
