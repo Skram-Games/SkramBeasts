@@ -202,6 +202,8 @@
   .tile{position:relative; background:#fff; border-radius:12px; border:3px solid var(--rarity,#ccc); aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 3px 6px rgba(0,0,0,.18); transition:transform .1s ease;}
   .tile.resting{opacity:.45;}
   .tile.benched{opacity:.7;}
+  .tile.on-mission{opacity:.4;}
+  .tile.on-mission::after{content:'';position:absolute;top:3px;right:3px;width:9px;height:9px;border-radius:50%;background:#D4A017;border:1.5px solid #1A1F1C;}
   .tile:active{transform:scale(.96);}
   .tile.holo{background:linear-gradient(120deg,#fff 0%, #fdf6e3 30%, #e9f7ff 55%, #fdf6e3 80%, #fff 100%); background-size:280% 280%; animation:holoshine 3.5s linear infinite;}
 
@@ -344,6 +346,8 @@
   .battle-fighter{width:80px; height:80px; position:relative;}
   .battle-fighter.right{transform:scaleX(-1);}
   .tap-center{position:relative; width:72px; height:72px; flex:none; display:flex; align-items:center; justify-content:center; cursor:pointer; border-radius:50%; background:rgba(232,84,46,.14); border:2px dashed rgba(232,84,46,.45); user-select:none; -webkit-tap-highlight-color:transparent;}
+  .tap-center.special-ready{background:rgba(78,143,209,.35); border:2px solid #4E8FD1; animation:specialReadyPulse 1s ease-in-out infinite; box-shadow:0 0 14px 2px rgba(78,143,209,.6);}
+  @keyframes specialReadyPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
   .special-bar{display:flex; flex-direction:row; gap:2px; width:110px; height:9px; margin:2px auto 0; background:rgba(0,0,0,.15); border-radius:4px; padding:2px; box-sizing:border-box;}
   .special-bar-seg{flex:1; border-radius:2px; background:rgba(255,255,255,.25); transition:background .2s ease;}
   .special-bar-seg.filled{background:#4E8FD1; box-shadow:0 0 4px rgba(78,143,209,.8);}
@@ -1073,22 +1077,13 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.5';
+const FIRMWARE_VERSION = '6.9';
 const FIRMWARE_CHANGELOG = [
-  'Warning-tape styling added to Exit Hive and Return to Arena, including their confirmation dialogs',
-  'Fixed the "Next Opponent" button overlapping the victory confetti burst',
-  'Mission fights now have a real 3-2-1-TAP countdown and show both fighters facing off, matching every other battle screen',
-  'Fixed a real bug: Hive defeats jumped straight to the run summary with zero warning - there is now a proper defeat screen showing what happened first',
-  'Fixed a real bug: Champion and Sharpshooter never counted Hive fights at all, since the Hive never reported its results to the stats that track them',
-  'Benched (non-favourited) Skrambeasts are now visibly greyed out on the Squad tab',
-  'Fixed a real bug: Max Trophies was recalculated live from your current collection, so releasing a maxed Skrambeast silently removed its trophy - now tracked as a permanent lifetime count that only goes up, with five new Farewell achievements for releasing maxed Skrambeasts by rarity',
-  'Fixed a real bug: a Skrambeast could be released while out on a Mission, leaving that mission permanently stuck. Releasing is now blocked while on a mission, and any mission left needing a fight for over 12 hours now auto-forfeits back to Available as a safety net',
-  'Quartermaster costumes no longer show up purchasable for 0 coins in the regular Costumes shop',
-  'The Matrix scanner skin\u2019s static is now properly blacked out instead of full-brightness noise',
-  'New Skram Tags row on the profile trophy bubble, trialled beneath Max Trophies',
-  'Squad Analysis now flags having fewer than 5 favourited Skrambeasts as its own, highest-priority suggestion',
-  'Fixed a real bug where closing a Skrambeast\u2019s profile from inside Squad Analysis could leave the Squad tab\u2019s page buttons missing',
-  'A few new splash screen lines about Missions, Tags, duelling, and Queen Raids',
+  'Fixed a real bug: egg ad-skips were limited to 5 per individual egg, not 5 total - now a single shared count across every egg you\u2019re incubating',
+  'Daily Quest completions now get a real celebration popup matching achievements, instead of a small toast',
+  'Fixed a real bug: opening a Skrambeast\u2019s detail view then switching tabs (instead of closing it first) could leave the whole game permanently unable to scroll, from any screen',
+  'Fixed a real bug: a defeated Queen only ever existed as a temporary variable with no trace in your save - navigating to the Store to buy a Smoker and coming back lost her permanently. She now persists correctly until you actually decide',
+  'Fixed a real bug: capturing the same Queen\u2019s barcode more than once created Skrambeasts that silently shared the exact same internal ID, so releasing one released all of them at once. Recapturing the same Queen is now blocked with a clear message unless you\u2019ve released the earlier one first',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1427,6 +1422,7 @@ function maybeTriggerBoss(){
     state.battlesSinceBoss = 0;
     state.activeBoss = generateBoss();
     state.activeBoss.revealed = false;
+    state.stats.bossesEncountered = (state.stats.bossesEncountered||0)+1;
     saveState();
     if(wildBattleLocked || bossBattleLocked || nearbyDuelInProgress) return; // don't interrupt an active fight - the popup surfaces on the next scan, or the tappable Stats row, once things are clear
     showBossDetectedPopup();
@@ -1454,7 +1450,6 @@ function showBossDetectedPopup(){
     const bribe = Math.min(state.coins, Math.round(boss.stats.hp*1.5));
     showConfirm(`Running means paying a bribe of ${formatCoins(bribe)} coins so she leaves you alone. This Queen won't count towards Boss Training. Continue?`, ()=>{
       state.coins = clampCoins(state.coins-bribe);
-      state.stats.bossesEncountered = (state.stats.bossesEncountered||0)+1;
       logAlmanacBoss(boss, 'shooed');
       state.activeBoss = null;
       saveState();
@@ -1586,7 +1581,7 @@ function startBossBattle(){
   const bossBar=document.getElementById('bossHpBar'), teamBar=document.getElementById('teamHpBar');
   const logEl=document.getElementById('bossBattleLog'), countdownEl=document.getElementById('bossCountdown'), tapZone=document.getElementById('bossTapZone');
   const rosterEl=document.getElementById('bossRoster');
-  const specialCtrl = createSpecialAttackController('bossSpecial', document.getElementById('bossFighterWrap'), ()=>{
+  const specialCtrl = createSpecialAttackController('bossSpecial', tapZone, document.getElementById('bossFighterWrap'), ()=>{
     const specialDmg = effectiveStatsWithBuff(team[activeIdx]).power+3;
     wHp -= specialDmg; addLog(`${team[activeIdx].name} unleashes a special attack for ${specialDmg}!`); sfxCritical();
     updateBars();
@@ -1645,6 +1640,7 @@ function startBossBattle(){
   function onTap(){
     if(resolved) return;
     const now=Date.now(); if(now-lastTapAt<TAP_MIN_GAP_MS) return; lastTapAt=now;
+    if(specialCtrl.consumeIfReady()) return;
     const fs=effectiveStatsWithBuff(team[activeIdx]);
     let dmg = Math.max(1, Math.round(fs.power*0.28 - boss.stats.guard*0.12 + (isMaxHitActive()?2:Math.random()*2)));
     const typeMult = typeMatchupMultiplier(team[activeIdx].type, boss.type);
@@ -1688,6 +1684,39 @@ function startBossBattle(){
   };
   showStep();
 }
+function renderQueenCaptureUI(panelEl, boss){
+  const ownedCaptureItems = CAPTURE_ITEMS.filter(it=> (state.inventory[it.key]||0)>0);
+  const captureNote = document.createElement('div'); captureNote.className='hint'; captureNote.style.textAlign='center'; captureNote.style.marginTop='8px';
+  captureNote.textContent = `Attempt to capture ${boss.name}?`;
+  panelEl.appendChild(captureNote);
+  const select = document.createElement('select');
+  select.id = 'bossCaptureItemSelect';
+  select.style.cssText = 'margin-top:4px;width:85%;font-size:11px;border-radius:6px;border:1px solid #ccc;padding:5px;display:block;margin-left:auto;margin-right:auto;';
+  select.innerHTML = `<option value="">No item</option>${ownedCaptureItems.map(it=>`<option value="${it.key}">${it.name} (Own ${state.inventory[it.key]})</option>`).join('')}`;
+  panelEl.appendChild(select);
+  const captureRow = document.createElement('div'); captureRow.className='buttons-row';
+  captureRow.appendChild(mkBtn('coral small full', 'Attempt Capture', ()=>{
+    const key = select.value;
+    if(key!=='smoker'){
+      showToast("You can't use that item on a Queen. She's too powerful.");
+      return;
+    }
+    if(state.collection.some(m=>m.barcode===boss.barcode)){
+      showToast("You already captured this Queen - shoo her from your Squad first if you want to try again.");
+      return;
+    }
+    state.inventory.smoker -= 1;
+    boss.favorite = false;
+    delete boss.awaitingCapture;
+    state.collection.push(boss);
+    state.stats.queensCaptured = (state.stats.queensCaptured||0)+1;
+    state.activeBoss = null;
+    saveState(); checkAchievements();
+    captureRow.remove(); select.remove(); captureNote.innerHTML = `<b style="color:#3f9142;">${boss.name} joined your Squad!</b>`;
+    showToast(`${boss.name} captured!`);
+  }));
+  panelEl.appendChild(captureRow);
+}
 function resolveBossBattle(boss, team, won){
   dynamicZone.innerHTML='';
   const panelEl = document.getElementById('panel');
@@ -1708,38 +1737,18 @@ function resolveBossBattle(boss, team, won){
     const crownDropped = Math.random() < CROWN_DROP_CHANCE;
     if(crownDropped){ state.inventory['queensCrown'] = (state.inventory['queensCrown']||0)+1; state.stats.crownsLifetime = (state.stats.crownsLifetime||0)+1; }
     logAlmanacBoss(boss, 'kept');
-    state.activeBoss = null;
+    // Kept alive and marked awaitingCapture, rather than nulled - she previously only existed as this
+    // function's local variable, so navigating away (e.g. to the Store to buy a Smoker) and back lost
+    // her permanently with no trace anywhere. Now she's restorable from the scan tab's dispatch.
+    boss.awaitingCapture = true;
+    state.activeBoss = boss;
     saveState();
     banner.innerHTML = celebrationHTML(true,'QUEEN DEFEATED!');
     panelEl.appendChild(banner);
     const note=document.createElement('div'); note.className='hint'; note.style.textAlign='center';
     note.innerHTML = `+${formatCoins(coinReward)} coins · +${xpEach} XP each · Found: ${loot.name}${crownDropped?"<br><b style=\"color:#D4A017;\">She dropped her Crown!</b>":''}<br>Boss Training is now unlocked!`;
     panelEl.appendChild(note);
-    const ownedCaptureItems = CAPTURE_ITEMS.filter(it=> (state.inventory[it.key]||0)>0);
-    const captureNote = document.createElement('div'); captureNote.className='hint'; captureNote.style.textAlign='center'; captureNote.style.marginTop='8px';
-    captureNote.textContent = `Attempt to capture ${boss.name}?`;
-    panelEl.appendChild(captureNote);
-    const select = document.createElement('select');
-    select.id = 'bossCaptureItemSelect';
-    select.style.cssText = 'margin-top:4px;width:85%;font-size:11px;border-radius:6px;border:1px solid #ccc;padding:5px;display:block;margin-left:auto;margin-right:auto;';
-    select.innerHTML = `<option value="">No item</option>${ownedCaptureItems.map(it=>`<option value="${it.key}">${it.name} (Own ${state.inventory[it.key]})</option>`).join('')}`;
-    panelEl.appendChild(select);
-    const captureRow = document.createElement('div'); captureRow.className='buttons-row';
-    captureRow.appendChild(mkBtn('coral small full', 'Attempt Capture', ()=>{
-      const key = select.value;
-      if(key!=='smoker'){
-        showToast("You can't use that item on a Queen. She's too powerful.");
-        return;
-      }
-      state.inventory.smoker -= 1;
-      boss.favorite = false;
-      state.collection.push(boss);
-      state.stats.queensCaptured = (state.stats.queensCaptured||0)+1;
-      saveState(); checkAchievements();
-      captureRow.remove(); select.remove(); captureNote.innerHTML = `<b style="color:#3f9142;">${boss.name} joined your Squad!</b>`;
-      showToast(`${boss.name} captured!`);
-    }));
-    panelEl.appendChild(captureRow);
+    renderQueenCaptureUI(panelEl, boss);
   } else {
     state.stats.bossDefeats = (state.stats.bossDefeats||0)+1;
     const restUntil = Date.now()+25*60000;
@@ -1905,9 +1914,9 @@ function costumeSVG(key){
     case 'championBelt': return '<rect x="30" y="72" width="40" height="7" rx="2" fill="#D4A017" stroke="#1A1F1C" stroke-width="1.4"/><rect x="45" y="71" width="10" height="9" rx="1.5" fill="#F2C13D" stroke="#1A1F1C" stroke-width="1"/>';
     case 'heroCape': return '<path d="M24 47 L76 47 L70 96 L30 96 Z" fill="#9B5DE5" opacity=".85" stroke="#1A1F1C" stroke-width="1.4"/><path d="M30 47 L28 92 M50 47 L50 94 M70 47 L72 92" stroke="#1A1F1C" stroke-width="0.8" opacity=".3"/>';
     case 'coolGlasses': return '<rect x="32" y="49" width="14" height="8" rx="2" fill="#1A1F1C" opacity=".8"/><rect x="54" y="49" width="14" height="8" rx="2" fill="#1A1F1C" opacity=".8"/><rect x="46" y="51" width="8" height="2" fill="#1A1F1C"/>';
-    case 'dogTagChain': return '<path d="M30 60 Q50 68 70 60" fill="none" stroke="#8a8a8a" stroke-width="2"/><rect x="44" y="62" width="12" height="16" rx="2" fill="#D4A017" stroke="#1A1F1C" stroke-width="1.3"/><circle cx="50" cy="66" r="1.5" fill="#1A1F1C"/>';
-    case 'veteranSash': return '<path d="M28 45 L52 95 L62 91 L38 41 Z" fill="#8FA998" opacity=".9" stroke="#1A1F1C" stroke-width="1.4"/><circle cx="45" cy="70" r="4" fill="#D4A017" stroke="#1A1F1C" stroke-width="1"/>';
-    case 'explorerRegalia': return '<path d="M28 45 L72 45 L66 95 L34 95 Z" fill="#F77F00" opacity=".55" stroke="#1A1F1C" stroke-width="1.4"/><rect x="40" y="38" width="20" height="9" rx="2" fill="#8a6d1a" stroke="#1A1F1C" stroke-width="1.2"/><circle cx="50" cy="66" r="5" fill="#D4A017" stroke="#1A1F1C" stroke-width="1.2"/>';
+    case 'dogTagChain': return '<path d="M28 58 Q40 66 50 62 Q60 66 72 58" fill="none" stroke="#8a8a8a" stroke-width="2"/><circle cx="34" cy="61" r="1.3" fill="#8a8a8a"/><circle cx="42" cy="64.5" r="1.3" fill="#8a8a8a"/><circle cx="58" cy="64.5" r="1.3" fill="#8a8a8a"/><circle cx="66" cy="61" r="1.3" fill="#8a8a8a"/><rect x="41" y="66" width="10" height="14" rx="2" fill="#a5682f" stroke="#1A1F1C" stroke-width="1.2" transform="rotate(-6 46 73)"/><rect x="49" y="68" width="11" height="15" rx="2" fill="#D4A017" stroke="#1A1F1C" stroke-width="1.3" transform="rotate(5 54 75)"/><circle cx="46" cy="69" r="1.3" fill="#1A1F1C" transform="rotate(-6 46 73)"/><circle cx="54" cy="71" r="1.3" fill="#1A1F1C" transform="rotate(5 54 75)"/>';
+    case 'veteranSash': return '<path d="M28 45 L52 95 L62 91 L38 41 Z" fill="#8FA998" opacity=".92" stroke="#1A1F1C" stroke-width="1.4"/><path d="M31 46 L54 92" fill="none" stroke="#fff" stroke-width="1" opacity=".4"/><path d="M35 42 L59 88 L62 86.5 L38 40.5 Z" fill="#6b8a5a" opacity=".8"/><path d="M42 60 L48 58 L54 61 L52 67 L46 68 Z" fill="#D4A017" stroke="#1A1F1C" stroke-width="1"/><circle cx="45" cy="80" r="3.2" fill="#a5682f" stroke="#1A1F1C" stroke-width="1"/>';
+    case 'explorerRegalia': return '<path d="M28 45 L72 45 L66 95 L34 95 Z" fill="#c98a3e" opacity=".9" stroke="#1A1F1C" stroke-width="1.4"/><path d="M30 45 L70 45 L67 58 Q50 64 33 58 Z" fill="#a5682f" stroke="#1A1F1C" stroke-width="1.1"/><path d="M35 63 L65 63" stroke="#8a6d1a" stroke-width="1" stroke-dasharray="2 2" opacity=".7"/><path d="M35 76 L65 76" stroke="#8a6d1a" stroke-width="1" stroke-dasharray="2 2" opacity=".7"/><rect x="40" y="38" width="20" height="9" rx="2" fill="#8a6d1a" stroke="#1A1F1C" stroke-width="1.2"/><rect x="43" y="66" width="14" height="12" rx="1.5" fill="#8a6d1a" opacity=".85" stroke="#1A1F1C" stroke-width="1"/><circle cx="50" cy="72" r="3.4" fill="#D4A017" stroke="#1A1F1C" stroke-width="1.2"/>';
     case 'queensCrown': return `<path d="M32.8 5.5 L36.2 -12.9 L44.3 -1.4 L50 -17.5 L55.8 -1.4 L63.8 -12.9 L67.3 5.5 Z" fill="url(#queensCrownGrad)" stroke="#8a6d1a" stroke-width="2"/>
       <circle cx="50" cy="-3.7" r="2.9" fill="#a13a24"/><circle cx="40.8" cy="3.2" r="2.3" fill="#4E8FD1"/><circle cx="59.2" cy="3.2" r="2.3" fill="#4E8FD1"/>
       <defs><linearGradient id="queensCrownGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFE27A"/><stop offset="100%" stop-color="#B8791C"/></linearGradient></defs>`;
@@ -1949,7 +1958,7 @@ function queenSVG(m, size){
   const wingStyle = QUEEN_WING_STYLES[Math.floor(rng()*QUEEN_WING_STYLES.length)];
   const legCount = rng()<0.5 ? 2 : 6;
   const legXs = legCount===2 ? [-12,12] : [-24,-13,-4,4,13,24];
-  const svg = `<svg viewBox="-60 -35 220 135" width="${Math.round(size*220/135)}" height="${size}">    <ellipse cx="50" cy="98" rx="30" ry="7" fill="#000" opacity=".2"/>
+  const svg = `<svg viewBox="-60 -35 220 135" width="${size}" height="${size}">    <ellipse cx="50" cy="98" rx="30" ry="7" fill="#000" opacity=".2"/>
     ${legXs.map(lx=> queenLegSVG(50+lx, 26, dark, '#1A1F1C', lx<0?-1:1)).join('')}
     ${queenWingSVG(wingStyle,'left',color,dark)}
     ${queenWingSVG(wingStyle,'right',color,dark)}
@@ -2076,12 +2085,46 @@ function incrementQuestProgress(templateKey, amount){
   });
   if(anyCompleted) saveState();
 }
+let questPopupQueue = [];
 function grantQuestReward(q){
   const diff = QUEST_DIFFICULTY.find(d=>d.key===q.difficulty);
   addCoins(diff.coins); addHunterXP(diff.xp);
   state.stats.questsCompleted = (state.stats.questsCompleted||0)+1;
   checkAchievements();
-  showToast(`Quest complete! +${formatCoins(diff.coins)} coins, +${formatCoins(diff.xp)} XP`);
+  const wasEmpty = questPopupQueue.length===0;
+  questPopupQueue.push({q, diff});
+  if(wasEmpty) showNextQuestPopup();
+}
+function showNextQuestPopup(){
+  if(questPopupQueue.length===0) return;
+  if(battleCountdownActive){ setTimeout(showNextQuestPopup, 400); return; }
+  const {q, diff} = questPopupQueue[0];
+  showQuestCompletePopup(q, diff, ()=>{
+    questPopupQueue.shift();
+    setTimeout(showNextQuestPopup, 500);
+  });
+}
+function showQuestCompletePopup(q, diff, onClose){
+  const template = QUEST_TEMPLATES.find(t=>t.key===q.templateKey);
+  const label = template ? template.label(q.target) : 'Daily Quest';
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal-box" style="max-width:300px;text-align:center;">
+    ${celebrationHTML(true,'QUEST COMPLETE!')}
+    <div class="pixel sm" style="margin-top:6px;">${escapeHtml(label)}</div>
+    <div style="font-family:'Baloo 2',sans-serif;font-weight:800;font-size:16px;color:${diff.color};margin:6px 0;">${diff.label}</div>
+    <div class="hint">+${formatCoins(diff.coins)} coins, +${formatCoins(diff.xp)} XP</div>
+    <div class="buttons-row"><button class="btn yolk small full" id="questPopupClose" disabled>Nice!</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  sfxAchievement();
+  setTimeout(()=>{ const b=document.getElementById('questPopupClose'); if(b) b.disabled=false; }, 600);
+  let resolved = false;
+  document.getElementById('questPopupClose').addEventListener('click', ()=>{
+    if(resolved) return; resolved = true;
+    overlay.remove();
+    if(onClose) onClose();
+  });
 }
 function skipQuest(q){
   ensureDailyQuests();
@@ -2127,7 +2170,7 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'typeShadow', name:'Creature of the Dark', desc:'Discover Shadow-type Skrambeasts', guide:'Discover Skrambeasts of the Shadow type - keep an eye out for the crescent icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='shadow' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
   {key:'typeCrystal', name:'Diamond in the Rough', desc:'Discover Crystal-type Skrambeasts', guide:'Discover Skrambeasts of the Crystal type - keep an eye out for the gem icon.', getValue: ()=> Object.values(state.almanac).filter(e=>e.type==='crystal' && !e.barcode.startsWith('arena-')).length, tiers:[5,20,60,150,350]},
   {key:'timeInvested', name:'Time Well Spent', desc:'Total time played', guide:'Just keep playing - this one ticks up on its own the longer the app stays open in front of you.', getValue: ()=> Math.floor((state.stats.totalPlayTimeMs||0)/3600000), tiers:[1,5,20,60,150]},
-  {key:'hiveConqueror', name:'Hive Conqueror', desc:'Best single Hive run', guide:'Enter The Hive (Arena → The Hive) and see how many waves you can clear in a single run before your Skrambeast falls.', getValue: ()=> state.stats.hiveBestKillCount||0, tiers:[10,25,75,200,500]},
+  {key:'hiveConqueror', name:'Hive Conqueror', desc:'Best single Hive run', guide:'Enter The Hive (Arena → The Hive) and see how many waves you can clear in a single run before your Skrambeast falls.', getValue: ()=> state.stats.hiveBestKillCount||0, tiers:[10,25,60,120,250]},
   {key:'swarmSlayer', name:'Swarm Slayer', desc:'Total Hive kills, all runs combined', guide:'Every monster defeated in The Hive counts toward this, across every run you ever attempt.', getValue: ()=> state.stats.hiveTotalKills||0, tiers:[50,250,1000,5000,20000]},
   {key:'hiveLegendarySlayer', name:'Against the Odds', desc:'Defeat Legendary-tier Hive opponents', guide:'Push deep enough into The Hive and the opponents you face start skewing toward Legendary rarity - defeat some of them.', getValue: ()=> state.stats.hiveLegendaryWins||0, tiers:[1,5,20,75,200]},
   {key:'hiveFullyStocked', name:'Fully Stocked', desc:'Try every Hive checkpoint bonus', guide:'Every time you reach a checkpoint in The Hive, you can pick one free bonus. Try all 5 different kinds across your runs.', getValue: ()=> (state.hiveShopKeysUsed||[]).length, tiers:[1,2,3,4,5]},
@@ -2334,6 +2377,11 @@ const HUNTER_RANKS = [
   {name:'Hunter Grandmaster ★★', xp:114000, color:'#8a2a6b', marks:2},
   {name:'Hunter Grandmaster ★★★', xp:148000, color:'#6b1a3a', marks:3},
   {name:'Hunter Champion', xp:192000, color:'#E8542E', marks:5},
+  {name:'Apex Hunter', xp:250000, color:'#16A085', marks:1},
+  {name:'Mythic Hunter', xp:330000, color:'#E056FD', marks:2},
+  {name:'Ascended Hunter', xp:440000, color:'#00B8D9', marks:3},
+  {name:'Celestial Hunter', xp:580000, color:'#F9CA24', marks:4},
+  {name:'Hunter Eternal', xp:760000, color:'#2C2C54', marks:5},
 ];
 function rankRibbonLabel(rank){
   // rank.name already embeds its own stars (e.g. "Marshal \u2605\u2605\u2605 Silver") - strip the
@@ -3008,7 +3056,7 @@ function startMissionEncounter(slotIndex, container, onResolve){
   const oppBar=document.getElementById('missionOppBar'), fBar=document.getElementById('missionFighterBar');
   const logEl=document.getElementById('missionBattleLog'), tapZone=document.getElementById('missionTapZone'), countdownEl=document.getElementById('missionCountdown');
   function addLog(t){ logEl.innerHTML+=t+'<br>'; logEl.scrollTop=logEl.scrollHeight; }
-  const specialCtrl = createSpecialAttackController('missionSpecial', document.getElementById('missionOppWrap'), ()=>{
+  const specialCtrl = createSpecialAttackController('missionSpecial', tapZone, document.getElementById('missionOppWrap'), ()=>{
     if(resolved) return;
     const dmg = effectiveStatsWithBuff(monster).power+3;
     wHp-=dmg; addLog(`${monster.name} unleashes a special attack for ${dmg}!`); sfxCritical();
@@ -3052,6 +3100,7 @@ function startMissionEncounter(slotIndex, container, onResolve){
   function onTap(){
     if(resolved) return;
     const now=Date.now(); if(now-lastTapAt<TAP_MIN_GAP_MS) return; lastTapAt=now;
+    if(specialCtrl.consumeIfReady()) return;
     const fs = effectiveStatsWithBuff(monster);
     let dmg = Math.max(1, Math.round(fs.power*0.28 - opponent.stats.guard*0.12 + (isMaxHitActive()?2:Math.random()*2)));
     const typeMult = typeMatchupMultiplier(monster.type, opponent.type);
@@ -3501,6 +3550,7 @@ let cameraStream = null;
 let barcodeDetectorSupported = ('BarcodeDetector' in window);
 let squadTickTimer = null;
 let encounter = null;
+let encounterSubScreen = 'view';
 
 let noiseTimer = null;
 function stopNoise(){ if(noiseTimer){ clearInterval(noiseTimer); noiseTimer=null; } }
@@ -3559,7 +3609,7 @@ function renderEggsPanel(panel){
     });
     const adRow = document.getElementById('eggAdRow');
     if(adRow){
-      const waitingEggs = eggs.map((e,i)=>({e,i})).filter(x=> Date.now()<x.e.readyAt && (x.e.adsUsed||0)<MAX_EGG_AD_REDUCTIONS);
+      const waitingEggs = eggs.map((e,i)=>({e,i})).filter(x=> Date.now()<x.e.readyAt);
       adRow.innerHTML = waitingEggs.length
         ? `<div class="buttons-row" style="margin-top:8px;"><button class="btn yolk small full" id="eggAdBtn">Watch Ad to Reduce Incubation Time</button></div>`
         : '';
@@ -3586,13 +3636,13 @@ const MAX_EGG_AD_REDUCTIONS = 5;
 function reduceEggTime(index, onDone){
   const egg = state.eggs[index];
   if(!egg || Date.now()>=egg.readyAt) return;
-  if((egg.adsUsed||0) >= MAX_EGG_AD_REDUCTIONS){ showToast("This egg has already used its 5 ad reductions"); return; }
+  if((state.eggAdSkipsUsed||0) >= MAX_EGG_AD_REDUCTIONS){ showToast("You've used all 5 egg ad-skips - they'll incubate at normal speed from here"); return; }
   showRewardedAd(()=>{
     const remaining = egg.readyAt - Date.now();
     egg.readyAt = Date.now() + Math.floor(remaining/2);
-    egg.adsUsed = (egg.adsUsed||0)+1;
+    state.eggAdSkipsUsed = (state.eggAdSkipsUsed||0)+1;
     saveState();
-    showToast(`Ad watch complete - incubation time reduced! (${egg.adsUsed}/${MAX_EGG_AD_REDUCTIONS} used)`);
+    showToast(`Ad watch complete - incubation time reduced! (${state.eggAdSkipsUsed}/${MAX_EGG_AD_REDUCTIONS} total used)`);
     onDone();
   });
 }
@@ -3607,7 +3657,7 @@ function showEggPicker(waitingEggs, onDone){
   document.body.appendChild(overlay);
   document.getElementById('eggPickerList').innerHTML = waitingEggs.map(({e,i})=> `<div class="store-item" data-pick-idx="${i}" style="cursor:pointer;">
     <div style="width:26px;height:26px;">${eggSVG(e.barcode,26)}</div>
-    <div class="sinfo"><div class="sname">Mystery Egg</div><div class="sdesc">Ready in ${eggCountdownLabel(e.readyAt-Date.now())} · ${MAX_EGG_AD_REDUCTIONS-(e.adsUsed||0)} ad reduction${MAX_EGG_AD_REDUCTIONS-(e.adsUsed||0)===1?'':'s'} left</div></div>
+    <div class="sinfo"><div class="sname">Mystery Egg</div><div class="sdesc">Ready in ${eggCountdownLabel(e.readyAt-Date.now())} · ${Math.max(0,MAX_EGG_AD_REDUCTIONS-(state.eggAdSkipsUsed||0))} ad reduction${Math.max(0,MAX_EGG_AD_REDUCTIONS-(state.eggAdSkipsUsed||0))===1?'':'s'} left (shared across all eggs)</div></div>
   </div>`).join('');
   document.getElementById('eggPickerCancel').addEventListener('click', ()=> overlay.remove());
   document.querySelectorAll('#eggPickerList [data-pick-idx]').forEach(row=>{
@@ -3824,6 +3874,11 @@ function handleScan(barcode){
     showBossDetectedPopup();
     return;
   }
+  if(state.activeBoss && state.activeBoss.awaitingCapture){
+    showToast("You still need to decide on the Queen you just defeated!");
+    renderTab();
+    return;
+  }
   const existingOwned = state.collection.find(m=>m.barcode===barcode);
   const wasDiscarded = state.discarded.includes(barcode);
   const pendingEgg = (state.eggs||[]).find(e=>e.barcode===barcode);
@@ -3848,6 +3903,7 @@ function handleScan(barcode){
 }
 function renderEncounter(wasDiscarded){
   stopNoise();
+  encounterSubScreen = 'view';
   dynamicZone.innerHTML='';
   const panel = document.getElementById('panel');
   if(panel) renderScannerFirmware(panel);
@@ -3926,6 +3982,7 @@ function mkBtn(cls, label, onClick){ const b=document.createElement('button'); b
 function openCaptureScreen(){
   stopNoise();
   dynamicZone.innerHTML='';
+  encounterSubScreen = 'capture';
   const m = encounter.monster;
   const items = CAPTURE_ITEMS.filter(it=> (state.inventory[it.key]||0)>0 && !it.queenOnly);
   screenEl.innerHTML = `
@@ -4040,8 +4097,8 @@ function specialBarHTML(idPrefix){
   for(let i=0;i<SPECIAL_BAR_SEGMENTS;i++) segs += `<div class="special-bar-seg" id="${idPrefix}-seg-${i}"></div>`;
   return `<div style="text-align:center;"><div style="font-size:9px;color:#4c5443;opacity:.8;font-family:'Rubik',sans-serif;">SPECIAL</div><div class="special-bar" id="${idPrefix}-bar">${segs}</div></div>`;
 }
-function createSpecialAttackController(idPrefix, opponentContainerEl, onSpecialAttack){
-  let hits=0, filledSegs=0, circleShown=false, circleTimer=null, flashTimer=null;
+function createSpecialAttackController(idPrefix, tapZoneEl, opponentContainerEl, onSpecialAttack){
+  let hits=0, filledSegs=0, ready=false;
   const maxHits = SPECIAL_BAR_SEGMENTS*SPECIAL_BAR_HITS_PER_SEGMENT;
   function updateSegs(){
     for(let i=0;i<SPECIAL_BAR_SEGMENTS;i++){
@@ -4049,39 +4106,30 @@ function createSpecialAttackController(idPrefix, opponentContainerEl, onSpecialA
       if(el) el.classList.toggle('filled', i<filledSegs);
     }
   }
-  function showCircle(){
-    circleShown = true;
-    const circle = document.createElement('div');
-    circle.className = 'special-tap-circle';
-    opponentContainerEl.appendChild(circle);
-    let tapped = false;
-    function cleanup(){
-      clearTimeout(flashTimer); clearTimeout(circleTimer);
-      circle.remove();
-      circleShown=false; hits=0; filledSegs=0; updateSegs();
-    }
-    circle.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      if(tapped) return; tapped = true;
+  return {
+    registerHit(){
+      if(ready) return;
+      hits++;
+      filledSegs = Math.min(SPECIAL_BAR_SEGMENTS, Math.floor(hits/SPECIAL_BAR_HITS_PER_SEGMENT));
+      updateSegs();
+      if(hits>=maxHits){ ready = true; tapZoneEl.classList.add('special-ready'); }
+    },
+    isReady(){ return ready; },
+    // Called at the top of a tap handler - if a special was ready, this consumes it (resets the bar,
+    // plays the impact effect on the opponent, and fires the callback) and returns true so the caller
+    // knows to skip its own normal-hit logic for this tap. Returns false otherwise, so the caller
+    // proceeds as normal and calls registerHit() after dealing damage, same as before.
+    consumeIfReady(){
+      if(!ready) return false;
+      ready = false; hits=0; filledSegs=0; updateSegs();
+      tapZoneEl.classList.remove('special-ready');
       const boom = document.createElement('div');
       boom.className = 'special-explosion'; boom.innerHTML = '<span></span>';
       opponentContainerEl.appendChild(boom);
       setTimeout(()=> boom.remove(), 550);
       onSpecialAttack();
-      cleanup();
-    });
-    flashTimer = setTimeout(()=> circle.classList.add('flashing'), 1000);
-    circleTimer = setTimeout(()=>{ if(!tapped) cleanup(); }, 3000);
-  }
-  return {
-    registerHit(){
-      if(circleShown) return;
-      hits++;
-      filledSegs = Math.min(SPECIAL_BAR_SEGMENTS, Math.floor(hits/SPECIAL_BAR_HITS_PER_SEGMENT));
-      updateSegs();
-      if(hits>=maxHits) showCircle();
-    },
-    isActive(){ return circleShown; }
+      return true;
+    }
   };
 }
 const HIVE_CHECKPOINT_INTERVAL = 25;
@@ -4425,7 +4473,7 @@ function runTapBattle(fighter, wild, targetEl, suffix, onComplete, skipTiredness
   const fPop=document.getElementById(ids.fPop), wPop=document.getElementById(ids.wPop);
   const logEl=document.getElementById(ids.log), countdownEl=document.getElementById(ids.countdown), tapZone=document.getElementById(ids.tapZone);
   const timerEl=document.getElementById(ids.timer);
-  const specialCtrl = createSpecialAttackController(ids.special, document.getElementById(ids.wFighter), ()=>{
+  const specialCtrl = createSpecialAttackController(ids.special, tapZone, document.getElementById(ids.wFighter), ()=>{
     const specialDmg = fs.power+3;
     wHp -= specialDmg; popDmg(wPop, specialDmg); addLog(`${fighter.name} unleashes a special attack for ${specialDmg}!`); sfxCritical();
     updateBars();
@@ -4479,6 +4527,7 @@ function runTapBattle(fighter, wild, targetEl, suffix, onComplete, skipTiredness
     if(now-lastTapAt < TAP_MIN_GAP_MS) return;
     if(playerHitCount===0 && battleStartAt && (now-battleStartAt)<400) quickReflex=true;
     lastTapAt = now;
+    if(specialCtrl.consumeIfReady()) return;
     let dmg = Math.max(1, Math.round(fs.power*penalty*0.28 - wild.stats.guard*0.15 + (isMaxHitActive()?2:Math.random()*2)));
     const critChance = Math.min(0.4, 0.08 + powerRatio*0.2 + (quickReflex?0.12:0));
     const isCrit = isMaxHitActive() || Math.random() < critChance;
@@ -4632,6 +4681,8 @@ function refreshTabBadges(){
   const eggReadyCount = Math.min(5, (state.eggs||[]).filter(e=> Date.now()>=e.readyAt).length);
   const questBadgeCount = Math.min(3, (state.dailyQuests? state.dailyQuests.quests : []).filter(q=> (q.completed||q.skipped) && !q.seen).length);
   const squadIssueCount = computeSquadAnalysis().issues.length; // already filtered for dismissed issues and capped at 3
+  const missionsActionCount = (state.missions||[]).filter(s=>s && (missionReady(s)||s.status==='needsBattle')).length;
+  const squadTabTotal = squadIssueCount + (friendRequestBadgeCount||0) + missionsActionCount;
   const setBadge = (id, count)=>{
     const el = document.getElementById(id);
     if(!el) return;
@@ -4639,7 +4690,7 @@ function refreshTabBadges(){
     else { el.style.display = 'none'; }
   };
   setBadge('tabBadgeScan', eggReadyCount);
-  setBadge('tabBadgeCollection', squadIssueCount);
+  setBadge('tabBadgeCollection', squadTabTotal);
   setBadge('tabBadgeAlmanac', questBadgeCount);
   setBadge('squadAnalysisBadge', squadIssueCount);
 }
@@ -4659,6 +4710,11 @@ function switchTab(name){
   if(hiveRunActive && name!=='versus'){ showToast("Finish or exit your Hive run before switching tabs!"); return; }
   if(raidBattleInProgress && name!=='versus'){ showToast("Finish the raid fight before switching tabs!"); return; }
   currentTab = name;
+  document.querySelectorAll('.modal-overlay').forEach(el=>{
+    if(el._boostTimerInterval) clearInterval(el._boostTimerInterval);
+    el.remove();
+  });
+  document.body.style.overflow = '';
   document.body.classList.toggle('vs-tab-active', name==='versus');
   document.querySelectorAll('.tab').forEach(t=> t.classList.toggle('active', t.dataset.tab===name));
   document.querySelector('.bezel').style.display = (name==='scan') ? 'block' : 'none';
@@ -4674,7 +4730,7 @@ function switchTab(name){
 }
 function renderTab(){
   const panel = document.getElementById('panel');
-  if(currentTab==='scan'){ panel.innerHTML=''; document.querySelector('.bezel').style.display='block'; if(state.activeBoss && state.activeBoss.revealed){ renderBossEncounter(); return; } if(!encounter) idleScreen(); renderScannerFirmware(panel); return; }
+  if(currentTab==='scan'){ panel.innerHTML=''; document.querySelector('.bezel').style.display='block'; if(state.activeBoss && state.activeBoss.awaitingCapture){ dynamicZone.innerHTML=''; panel.innerHTML=''; const banner=document.createElement('div'); banner.innerHTML=celebrationHTML(true,'QUEEN DEFEATED!'); panel.appendChild(banner); const note=document.createElement('div'); note.className='hint'; note.style.textAlign='center'; note.textContent='Boss Training is now unlocked!'; panel.appendChild(note); renderQueenCaptureUI(panel, state.activeBoss); const row=document.createElement('div'); row.className='buttons-row'; row.appendChild(mkBtn('yolk small full','Back to Scanner', ()=>{ panel.innerHTML=''; idleScreen(); renderScannerFirmware(panel); })); panel.appendChild(row); return; } if(state.activeBoss && state.activeBoss.revealed){ renderBossEncounter(); return; } if(!encounter) idleScreen(); else if(encounterSubScreen==='capture'){ renderScannerFirmware(panel); openCaptureScreen(); return; } renderScannerFirmware(panel); return; }
   if(currentTab==='collection'){ renderSquadTab(panel); return; }
   if(currentTab==='store'){ renderStore(panel); return; }
   if(currentTab==='almanac'){ renderAlmanac(panel); return; }
@@ -4740,7 +4796,7 @@ function renderMissionsLog(container, panel){
       const ready = missionReady(slot);
       const needsBattle = slot.status==='needsBattle';
       const pct = missionProgress(slot)*100;
-      return `<div class="log-row" style="position:relative;overflow:hidden;flex-direction:column;align-items:stretch;padding:10px;${needsBattle?'animation:missionFightPulse 1s ease-in-out infinite;':''}">
+      return `<div class="log-row" style="position:relative;overflow:hidden;flex-direction:column;align-items:stretch;padding:10px;${needsBattle?'animation:missionFightPulse 1s ease-in-out infinite;':''}${(!needsBattle && !ready)?'cursor:pointer;':''}" ${(!needsBattle && !ready)?`data-inprogress-slot="${i}"`:''}>
         ${missionSceneSVG(tier.scene)}
         <div style="position:relative;display:flex;align-items:center;gap:6px;">
           ${monster?`<div style="width:24px;height:24px;flex-shrink:0;">${monsterSVG(monster,24)}</div>`:''}
@@ -4764,6 +4820,17 @@ function renderMissionsLog(container, panel){
       missionBenchPage = 0;
       missionSubView='tierSelect';
       renderMissions(container, panel);
+    }));
+    lanesEl.querySelectorAll('[data-inprogress-slot]').forEach(el=> el.addEventListener('click', ()=>{
+      const slotIdx = Number(el.dataset.inprogressSlot);
+      const slot = state.missions[slotIdx];
+      if(!slot) return;
+      const monster = state.collection.find(m=>m.id===slot.monsterId);
+      showConfirm(`Abort this mission? You'll lose the coins, XP, and loot you'd have earned, and ${monster?escapeHtml(monster.name):'this Skrambeast'} will come back tired for 5 minutes.`, ()=>{
+        failMission(slotIdx);
+        refreshLanes();
+        refreshMissionsBadge();
+      }, {confirmLabel:'Abort Mission', hazard:true});
     }));
     lanesEl.querySelectorAll('[data-collect-slot]').forEach(btn=> btn.addEventListener('click', ()=>{
       collectMissionReward(Number(btn.dataset.collectSlot));
@@ -4954,7 +5021,7 @@ function renderSquadGrid(panel){
   pageItems.forEach(m=>{
     const rs = RARITY_STYLE[m.rarity];
     const tile = document.createElement('div');
-    tile.className = 'tile'+(m.holo?' holo':'')+(isTired(m)?' resting':'')+(!m.favorite?' benched':'');
+    tile.className = 'tile'+(m.holo?' holo':'')+(isTired(m)?' resting':'')+(!m.favorite?' benched':'')+(monsterOnMission(m)?' on-mission':'');
     tile.dataset.rarity = m.rarity;
     tile.style.setProperty('--rarity', rs.color);
     const boostBadgeStr = m.favorite ? ['xp','coin','capture'].map(kind=>{
@@ -5691,12 +5758,6 @@ function showFriendSnapshot(friendPlayerId, pr){
         if((pr.maxedQueens||0)>0) trophies.push(`<div style="display:flex;align-items:center;gap:2px;">${iconCrown()}<span class="pixel sm">${pr.maxedQueens}</span></div>`);
         return trophies.length ? trophies.join('') : '<div class="hint">None yet</div>';
       })()}</div>
-      <div class="pixel sm" style="margin-top:6px;">Skram Tags</div>
-      <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">${(()=>{
-        const tags = pr.skramTags||{};
-        const held = MISSION_TIERS.filter(t=> (tags[t.key]||0)>0).map(t=> `<div style="display:flex;align-items:center;gap:2px;">${skramTagSVG(t.color,14)}<span class="pixel sm">${tags[t.key]}</span></div>`);
-        return held.length ? held.join('') : '<div class="hint">None yet</div>';
-      })()}</div>
       <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
       <div class="log-row" id="fsHighestRow" style="${pr.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${pr.highest? pr.highest.name+' - Lv.'+pr.highest.level+' ('+(pr.highest.isBoss?'Queen':RARITY_STYLE[pr.highest.rarity].label)+')' : '-'}</div></div></div>
       <div class="pixel sm" style="margin-top:8px;">Squad</div>
@@ -6038,7 +6099,7 @@ function renderStatsPanel(container, panel){
     ()=>{
       return `
         <div class="section-label">Bosses</div>
-        ${state.activeBoss ? `<div class="log-row" id="queenWaitingRow" style="cursor:pointer;"><div class="log-info"><div class="log-name">PROGRESS TO NEXT QUEEN</div></div><div class="log-status" style="background:#D4A017;">A Queen is already waiting for you! (Tap)</div></div>` : (()=>{ const tf=state.lifetimeBattlesTowardBoss||0; const nextThreshold=(Math.floor(tf/BOSS_BATTLE_THRESHOLD)+1)*BOSS_BATTLE_THRESHOLD; return row('Progress to next Queen', `${tf}/${nextThreshold}`, '#9B5DE5'); })()}
+        ${state.activeBoss ? `<div class="log-row" id="queenWaitingRow" style="cursor:pointer;"><div class="log-info"><div class="log-name">QUEEN STATUS</div></div><div class="log-status" style="background:#D4A017;">Ready! (Tap)</div></div>` : (()=>{ const tf=state.lifetimeBattlesTowardBoss||0; const nextThreshold=(Math.floor(tf/BOSS_BATTLE_THRESHOLD)+1)*BOSS_BATTLE_THRESHOLD; return row('Progress to next Queen', `${tf}/${nextThreshold}`, '#9B5DE5'); })()}
         ${row('Bosses encountered', s.bossesEncountered, '#a13a24')}
         ${row('Wild Boss Wins', s.bossWins, '#3f6b4a')}
         ${row('Boss Training Wins', s.bossTrainingWins||0, '#3f6b4a')}
@@ -6441,13 +6502,13 @@ function renderBoosts(container, panel){
   const adBlocked = adCooldownActive || coinBoostActive;
   const adRow = document.createElement('div'); adRow.className='store-item';
   adRow.innerHTML = `<div class="cat-badge" style="background:#3f9142;">AD</div>
-    <div class="sinfo"><div class="sname">Free Coin Boost</div><div class="sdesc">Watch an ad for a small x1.5 coin boost - 2 minutes${adCooldownActive?` · again in ${Math.ceil((state.freeAdBoostCooldownUntil-Date.now())/60000)}m`:(coinBoostActive?' · a coin boost is already running':'')}</div></div>
+    <div class="sinfo"><div class="sname">Free Coin Boost</div><div class="sdesc">Watch an ad for a small x1.5 coin boost - 30 seconds${adCooldownActive?` · again in ${Math.ceil((state.freeAdBoostCooldownUntil-Date.now())/60000)}m`:(coinBoostActive?' · a coin boost is already running':'')}</div></div>
     <button class="btn tiny yolk" style="font-size:11px;padding:6px 10px;" ${adBlocked?'disabled':''}>Watch Ad</button>`;
   if(!adBlocked){
     adRow.querySelector('button').addEventListener('click', ()=>{
       showRewardedAd(()=>{
         if(!state.activeBoosts) state.activeBoosts={};
-        state.activeBoosts['coin'] = { key:'freeAdCoinBoost', mult:1.5, expiresAt: Date.now()+2*60000 };
+        state.activeBoosts['coin'] = { key:'freeAdCoinBoost', mult:1.5, expiresAt: Date.now()+30*1000 };
         state.freeAdBoostCooldownUntil = Date.now()+30*60000;
         saveState(); sfxCoin();
         showToast("Free Coin Boost activated!");
@@ -6561,11 +6622,11 @@ function renderBoosts(container, panel){
   }, 1000);
 }
 const QUARTERMASTER_ITEMS = [
-  {key:'fieldRations', name:'Field Rations', desc:'A modest coin bundle', tierKey:'common', tagCost:3, type:'coins', coins:500},
-  {key:'dogTagChain', name:'Dog Tag Chain', desc:'A wearable necklace of tags - purely cosmetic', tierKey:'uncommon', tagCost:5, type:'costume', costumeKey:'dogTagChain'},
-  {key:'quartermastersKit', name:"Quartermaster's Kit", desc:'A potion plus a modest gear piece', tierKey:'rare', tagCost:4, type:'bundle'},
-  {key:'veteranSash', name:"Veteran's Sash", desc:'Slightly better Mission encounter odds while worn', tierKey:'epic', tagCost:6, type:'costume', costumeKey:'veteranSash'},
-  {key:'explorerRegalia', name:"The Explorer's Regalia", desc:'The full cosmetic set - earned through real combat', tierKey:'legendary', tagCost:10, type:'costume', costumeKey:'explorerRegalia'},
+  {key:'fieldRations', name:'Field Rations', desc:'A modest coin bundle', tierKey:'common', tagCost:6, type:'coins', coins:500},
+  {key:'dogTagChain', name:'Dog Tag Chain', desc:'A wearable necklace of tags - purely cosmetic', tierKey:'uncommon', tagCost:10, type:'costume', costumeKey:'dogTagChain'},
+  {key:'quartermastersKit', name:"Quartermaster's Kit", desc:'A potion plus a modest gear piece', tierKey:'rare', tagCost:8, type:'bundle'},
+  {key:'veteranSash', name:"Veteran's Sash", desc:'Slightly better Mission encounter odds while worn', tierKey:'epic', tagCost:12, type:'costume', costumeKey:'veteranSash'},
+  {key:'explorerRegalia', name:"The Explorer's Regalia", desc:'The full cosmetic set - earned through real combat', tierKey:'legendary', tagCost:20, type:'costume', costumeKey:'explorerRegalia'},
 ];
 function renderQuartermaster(container, panel){
   const tags = state.skramTags||{common:0,uncommon:0,rare:0,epic:0,legendary:0};
@@ -6573,7 +6634,7 @@ function renderQuartermaster(container, panel){
     const tier = MISSION_TIERS.find(t=>t.key===it.tierKey);
     const owned = it.type==='costume' && (state.inventory[it.costumeKey]||0)>0;
     const canAfford = (tags[it.tierKey]||0)>=it.tagCost;
-    return `<div class="store-item"><div class="cat-badge" style="background:${tier.color};">${skramTagSVG('#fff',18)}</div><div class="sinfo"><div class="sname">${it.name}</div><div class="sdesc">${it.desc}</div></div><button class="btn tiny ${owned?'cream':'yolk'} full" data-qm-buy="${it.key}" style="flex:none;width:auto;padding:6px 10px;" ${owned||!canAfford?'disabled':''}>${owned?'Owned':`${it.tagCost} ${tier.name}`}</button></div>`;
+    return `<div class="store-item"><div class="cat-badge" style="background:${tier.color};">${skramTagSVG('#fff',18)}</div><div class="sinfo"><div class="sname">${it.name}</div><div class="sdesc">${it.desc}</div></div><button class="btn tiny ${owned?'cream':'yolk'}" data-qm-buy="${it.key}" style="flex:none;width:auto;padding:6px 10px;display:flex;align-items:center;gap:4px;" ${owned||!canAfford?'disabled':''}>${owned?'Owned':`${skramTagSVG(tier.color,14)}<span>${it.tagCost}</span>`}</button></div>`;
   }).join('');
   container.querySelectorAll('[data-qm-buy]').forEach(btn=> btn.addEventListener('click', ()=>{
     const it = QUARTERMASTER_ITEMS.find(q=>q.key===btn.dataset.qmBuy);
@@ -6897,7 +6958,7 @@ function startBossTrainingBattle(boss, container){
   const bossBar=document.getElementById('btHpBar');
   const logEl=document.getElementById('btBattleLog'), countdownEl=document.getElementById('btCountdown'), tapZone=document.getElementById('btTapZone');
   const rosterEl=document.getElementById('btRoster');
-  const specialCtrl = createSpecialAttackController('btSpecial', document.getElementById('btFighterWrap'), ()=>{
+  const specialCtrl = createSpecialAttackController('btSpecial', tapZone, document.getElementById('btFighterWrap'), ()=>{
     const specialDmg = effectiveStatsWithBuff(team[activeIdx]).power+3;
     wHp -= specialDmg; addLog(`${team[activeIdx].name} unleashes a special attack for ${specialDmg}!`); sfxCritical();
     updateBars();
@@ -6943,6 +7004,7 @@ function startBossTrainingBattle(boss, container){
   function onTap(){
     if(resolved) return;
     const now=Date.now(); if(now-lastTapAt<TAP_MIN_GAP_MS) return; lastTapAt=now;
+    if(specialCtrl.consumeIfReady()) return;
     const fs=effectiveStatsWithBuff(team[activeIdx]);
     let dmg = Math.max(1, Math.round(fs.power*0.28 - boss.stats.guard*0.12 + (isMaxHitActive()?2:Math.random()*2)));
     const typeMult = typeMatchupMultiplier(team[activeIdx].type, boss.type);
@@ -7808,6 +7870,7 @@ async function deleteRaidDoc(code){
     try{ await fetch(`${FIREBASE_DB_URL}/shared/raids/${firebaseSafeKey(code)}.json`, { method:'DELETE' }); }catch(e){}
   }
 }
+const RAID_LOBBY_STALE_MS = 10*60000;
 async function listOpenRaids(){
   if(HAS_CLAUDE_STORAGE){
     try{
@@ -7816,7 +7879,7 @@ async function listOpenRaids(){
       const docs = await Promise.all(res.keys.map(async k=>{
         try{ const r = await window.storage.get(k, true); return r ? JSON.parse(r.value) : null; }catch(e){ return null; }
       }));
-      return docs.filter(d=> d && d.status==='forming');
+      return docs.filter(d=> d && d.status==='forming' && (Date.now()-(d.createdAt||0))<RAID_LOBBY_STALE_MS);
     }catch(e){ return []; }
   }
   if(HAS_FIREBASE){
@@ -7825,7 +7888,7 @@ async function listOpenRaids(){
       if(!res.ok) return [];
       const data = await res.json();
       if(!data) return [];
-      return Object.values(data).filter(d=> d && d.status==='forming');
+      return Object.values(data).filter(d=> d && d.status==='forming' && (Date.now()-(d.createdAt||0))<RAID_LOBBY_STALE_MS);
     }catch(e){ return []; }
   }
   return [];
@@ -7923,7 +7986,7 @@ async function renderRaidBattle(container, panel){
   const bossBar=document.getElementById('raidHpBar');
   const logEl=document.getElementById('raidBattleLog'), countdownEl=document.getElementById('raidCountdown'), tapZone=document.getElementById('raidTapZone');
   const rosterEl=document.getElementById('raidRoster'), partyRosterEl=document.getElementById('raidPartyRoster');
-  const specialCtrl = createSpecialAttackController('raidSpecial', document.getElementById('raidFighterWrap'), ()=>{
+  const specialCtrl = createSpecialAttackController('raidSpecial', tapZone, document.getElementById('raidFighterWrap'), ()=>{
     if(iAmOut||resolved) return;
     const specialDmg = effectiveStatsWithBuff(team[activeIdx]).power+3;
     myDamageDealt += specialDmg; addLog(`${team[activeIdx].name} unleashes a special attack for ${specialDmg}!`); sfxCritical();
@@ -7959,6 +8022,23 @@ async function renderRaidBattle(container, panel){
       addLog(`Your whole squad has fainted - you're out, but the raid continues!`);
       tapZone.style.visibility='hidden';
       clearInterval(opponentTimer);
+      const leaveRow = document.createElement('div');
+      leaveRow.className = 'buttons-row';
+      leaveRow.style.marginTop = '10px';
+      leaveRow.innerHTML = `<button class="btn cream small full" id="raidIAmOutLeaveBtn">Leave Raid</button>`;
+      container.appendChild(leaveRow);
+      document.getElementById('raidIAmOutLeaveBtn').addEventListener('click', async ()=>{
+        if(resolved) return;
+        clearInterval(syncTimer);
+        try{
+          const fresh = await fetchRaidDoc(raidCode);
+          if(fresh && fresh.participants[myId]){ fresh.participants[myId].present = false; await saveRaidDoc(raidCode, fresh); }
+        }catch(e){}
+        resolved = true;
+        raidBattleInProgress = false;
+        raidCode = null; raidDoc = null;
+        versusCategory='pvpChoice'; renderVersus(panel);
+      });
       return;
     }
     activeIdx=nextIdx; fHp=fighterMaxHp(team[activeIdx]);
@@ -8011,6 +8091,7 @@ async function renderRaidBattle(container, panel){
   function onTap(){
     if(resolved || iAmOut) return;
     const now=Date.now(); if(now-lastTapAt<TAP_MIN_GAP_MS) return; lastTapAt=now;
+    if(specialCtrl.consumeIfReady()) return;
     const fs=effectiveStatsWithBuff(team[activeIdx]);
     let dmg = Math.max(1, Math.round(fs.power*0.28 - boss.stats.guard*0.12 + (isMaxHitActive()?2:Math.random()*2)));
     const typeMult = typeMatchupMultiplier(team[activeIdx].type, boss.type);
@@ -8145,6 +8226,7 @@ function ensureNearbyPolling(panel){
       const mySide2 = mySide(fresh,'battle');
       if(mySide2 && mySide2.ready){ mySide2.lastActiveAt = Date.now(); saveNearbyDocRaw(nearbyCode, fresh); } // heartbeat - lets the other side detect a genuine disconnect rather than wait forever
     }
+    if(document.activeElement && document.activeElement.tagName==='SELECT') return; // a rebuild here would forcibly close an open dropdown before the player can pick anything
     evaluateNearbyTradeAndSave();
     evaluateNearbyBattle();
     renderNearbyActive(panel);
