@@ -201,6 +201,7 @@
   .tile-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;}
   .tile{position:relative; background:#fff; border-radius:12px; border:3px solid var(--rarity,#ccc); aspect-ratio:1; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 3px 6px rgba(0,0,0,.18); transition:transform .1s ease;}
   .tile.resting{opacity:.45;}
+  .tile.benched{opacity:.7;}
   .tile:active{transform:scale(.96);}
   .tile.holo{background:linear-gradient(120deg,#fff 0%, #fdf6e3 30%, #e9f7ff 55%, #fdf6e3 80%, #fff 100%); background-size:280% 280%; animation:holoshine 3.5s linear infinite;}
 
@@ -588,6 +589,8 @@ function achievementIcon(key){
     case 'missionRunner': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 20 L10 6 L14 6 L20 20 Z" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 13 L15 13" stroke="#fff" stroke-width="1.6"/></svg>`;
     case 'tagCollector': return skramTagSVG('#fff', 20);
     case 'legendaryExplorer': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 20 L12 4 L18 20 Z" fill="#fff"/><path d="M9 8 L11 2 L13 8 L15 4 L16 9" fill="none" stroke="#fff" stroke-width="1.4"/></svg>`;
+    case 'shooCommon': case 'shooUncommon': case 'shooRare': case 'shooEpic': case 'shooLegendary':
+      return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 4h8v16H5z" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M13 12 H21 M17 8 L21 12 L17 16" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     default: return '';
   }
 }
@@ -887,6 +890,10 @@ async function loadState(){
     }
   }catch(e){ /* first run */ }
   state.stats = Object.assign({}, defaultStats, state.stats||{}); // preserve new fields on old saves
+  if(!state.stats.lifetimeMaxedByRarity){
+    state.stats.lifetimeMaxedByRarity = RARITY_ORDER.reduce((acc,r)=>{ acc[r] = state.collection.filter(m=>isMaxed(m) && m.rarity===r && !m.isBoss).length; return acc; }, {});
+    state.stats.lifetimeMaxedQueens = state.collection.filter(m=>isMaxed(m) && m.isBoss).length;
+  }
   state.settings = Object.assign({}, defaultSettings, state.settings||{});
   state.dailyLogin = Object.assign({}, defaultDailyLogin, state.dailyLogin||{});
   state.scannerCustomization = Object.assign({}, defaultScannerCustomization, state.scannerCustomization||{});
@@ -1066,12 +1073,22 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.4';
+const FIRMWARE_VERSION = '6.5';
 const FIRMWARE_CHANGELOG = [
-  'Missions is complete: mid-mission encounters are real tap battles now, with the ad-revive-to-75%-HP save and a 5-minute rest penalty for a retreat or loss',
-  'New: Skram Tags, earned only from winning Mission encounters, tier-matched to the mission and never tradeable - collect them for a real reveal moment',
-  'New: the Quartermaster store section spends Tags instead of coins, capped by a five-item catalog topped by the Legendary-exclusive Explorer\u2019s Regalia',
-  'New Missions stats page and three achievements: Mission Runner, Tag Collector, and Legendary Explorer',
+  'Warning-tape styling added to Exit Hive and Return to Arena, including their confirmation dialogs',
+  'Fixed the "Next Opponent" button overlapping the victory confetti burst',
+  'Mission fights now have a real 3-2-1-TAP countdown and show both fighters facing off, matching every other battle screen',
+  'Fixed a real bug: Hive defeats jumped straight to the run summary with zero warning - there is now a proper defeat screen showing what happened first',
+  'Fixed a real bug: Champion and Sharpshooter never counted Hive fights at all, since the Hive never reported its results to the stats that track them',
+  'Benched (non-favourited) Skrambeasts are now visibly greyed out on the Squad tab',
+  'Fixed a real bug: Max Trophies was recalculated live from your current collection, so releasing a maxed Skrambeast silently removed its trophy - now tracked as a permanent lifetime count that only goes up, with five new Farewell achievements for releasing maxed Skrambeasts by rarity',
+  'Fixed a real bug: a Skrambeast could be released while out on a Mission, leaving that mission permanently stuck. Releasing is now blocked while on a mission, and any mission left needing a fight for over 12 hours now auto-forfeits back to Available as a safety net',
+  'Quartermaster costumes no longer show up purchasable for 0 coins in the regular Costumes shop',
+  'The Matrix scanner skin\u2019s static is now properly blacked out instead of full-brightness noise',
+  'New Skram Tags row on the profile trophy bubble, trialled beneath Max Trophies',
+  'Squad Analysis now flags having fewer than 5 favourited Skrambeasts as its own, highest-priority suggestion',
+  'Fixed a real bug where closing a Skrambeast\u2019s profile from inside Squad Analysis could leave the Squad tab\u2019s page buttons missing',
+  'A few new splash screen lines about Missions, Tags, duelling, and Queen Raids',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1162,7 +1179,14 @@ function grantXP(m, amount){
   let leveled = false;
   while(m.level<cap && m.xp>=xpToNext(m.level)){ m.xp -= xpToNext(m.level); m.level++; leveled=true; }
   if(leveled) sfxLevelUp();
-  if(m.level>=cap){ m.level=cap; m.xp=0; if(!m.maxedAt) m.maxedAt=Date.now(); }
+  if(m.level>=cap){
+    m.level=cap; m.xp=0;
+    if(!m.maxedAt){
+      m.maxedAt=Date.now();
+      if(m.isBoss) state.stats.lifetimeMaxedQueens = (state.stats.lifetimeMaxedQueens||0)+1;
+      else { if(!state.stats.lifetimeMaxedByRarity) state.stats.lifetimeMaxedByRarity={}; state.stats.lifetimeMaxedByRarity[m.rarity] = (state.stats.lifetimeMaxedByRarity[m.rarity]||0)+1; }
+    }
+  }
   recomputeStats(m);
   return leveled;
 }
@@ -2114,6 +2138,11 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'missionRunner', name:'Mission Runner', desc:'Complete Missions', guide:'Send a bench Skrambeast on a Mission from the Missions tab. Higher tiers take longer and carry real risk, but pay out more.', getValue: ()=> state.stats.missionsCompleted||0, tiers:[1,10,30,75,150]},
   {key:'tagCollector', name:'Tag Collector', desc:'Earn Skram Tags', guide:'Win a mid-Mission encounter to earn a Skram Tag matching that Mission tier. Spend them at the Quartermaster, or keep collecting.', getValue: ()=> state.stats.lifetimeSkramTags||0, tiers:[1,10,30,75,150]},
   {key:'legendaryExplorer', name:'Legendary Explorer', desc:'Survive Legendary Missions', guide:'A Legendary Mission is the toughest tier - 6 hours, 3 real encounters. Winning all of them without retreating completes it.', getValue: ()=> state.stats.legendaryMissionsSurvived||0, tiers:[1,3,8,15,25]},
+  {key:'shooCommon', name:'Common Farewell', desc:'Release maxed Common Skrambeasts', guide:'Level a Common Skrambeast to its cap, then release it. Your Max Trophies count is never affected by this - it only goes up.', getValue: ()=> state.stats.maxedShooedByRarity&&state.stats.maxedShooedByRarity.common||0, tiers:[5,20,50,150,400]},
+  {key:'shooUncommon', name:'Uncommon Farewell', desc:'Release maxed Uncommon Skrambeasts', guide:'Level an Uncommon Skrambeast to its cap, then release it.', getValue: ()=> state.stats.maxedShooedByRarity&&state.stats.maxedShooedByRarity.uncommon||0, tiers:[3,12,30,90,250]},
+  {key:'shooRare', name:'Rare Farewell', desc:'Release maxed Rare Skrambeasts', guide:'Level a Rare Skrambeast to its cap, then release it.', getValue: ()=> state.stats.maxedShooedByRarity&&state.stats.maxedShooedByRarity.rare||0, tiers:[2,8,20,60,150]},
+  {key:'shooEpic', name:'Epic Farewell', desc:'Release maxed Epic Skrambeasts', guide:'Level an Epic Skrambeast to its cap, then release it.', getValue: ()=> state.stats.maxedShooedByRarity&&state.stats.maxedShooedByRarity.epic||0, tiers:[1,5,15,40,100]},
+  {key:'shooLegendary', name:'Legendary Farewell', desc:'Release maxed Legendary Skrambeasts', guide:'Level a Legendary Skrambeast all the way to its cap, then release it - the hardest tier to let go of.', getValue: ()=> state.stats.maxedShooedByRarity&&state.stats.maxedShooedByRarity.legendary||0, tiers:[1,3,8,20,50]},
   {key:'globalAce', name:'Global Ace', desc:"Rank on the Global leaderboard", guide:"Open Friends > Global to see how you stack up against every hunter, not just your friends. Earning more Hunter XP climbs you higher - the top 20 make the board at all.", getValue: ()=> state.stats.bestGlobalRank ? Math.max(0, 21-state.stats.bestGlobalRank) : 0, tiers:[1,11,16,18,20]},
 ];
 function achievementsUnlockedCount(){
@@ -2643,9 +2672,9 @@ const COSTUME_ITEMS = [
   {key:'partyHatBlue', name:'Blue Party Hat', desc:'Collectible - mystery box only', cost:0, partyHat:true, color:'#2E5FA8'},
   {key:'partyHatGreen', name:'Green Party Hat', desc:'Collectible - mystery box only', cost:0, partyHat:true, color:'#3F9142'},
   {key:'partyHatPurple', name:'Purple Party Hat', desc:'Collectible - mystery box only, the rarest color', cost:0, partyHat:true, color:'#8E44AD'},
-  {key:'dogTagChain', name:'Dog Tag Chain', desc:'Quartermaster exclusive - purely cosmetic', cost:0},
-  {key:'veteranSash', name:"Veteran's Sash", desc:'Quartermaster exclusive - slightly better Mission encounter odds while worn', cost:0, missionOddsBonus:0.05},
-  {key:'explorerRegalia', name:"Explorer's Regalia", desc:'Quartermaster exclusive - the full set, earned through real combat', cost:0},
+  {key:'dogTagChain', name:'Dog Tag Chain', desc:'Quartermaster exclusive - purely cosmetic', cost:0, quartermaster:true},
+  {key:'veteranSash', name:"Veteran's Sash", desc:'Quartermaster exclusive - slightly better Mission encounter odds while worn', cost:0, missionOddsBonus:0.05, quartermaster:true},
+  {key:'explorerRegalia', name:"Explorer's Regalia", desc:'Quartermaster exclusive - the full set, earned through real combat', cost:0, quartermaster:true},
 ];
 // Odds mirror the real-world OSRS party hat rarity order (yellow most common, purple rarest) - colors match, our hat shape doesn't copy theirs.
 const PARTY_HAT_TIERS = [
@@ -2727,6 +2756,16 @@ function computeSquadAnalysisUncached(squad){
   if(squad.length===0) return {issues:[], benchSuggestion:null, empty:true};
   const dismissed = state.squadAnalysisDismissed || {};
   const issues = [];
+  let smallSquadIssue = null;
+  if(squad.length<5){
+    smallSquadIssue = {
+      id:'smallSquad', kind:'smallSquad', priority:0,
+      headline: squad.length===1 ? 'Only 1 Skrambeast favourited' : `Only ${squad.length} Skrambeasts favourited`,
+      detail: `You can favourite up to 5. A full squad means more chances before a fight ends.`,
+      color:'#a13a24'
+    };
+    issues.push(smallSquadIssue);
+  }
   const typeCounts = {};
   squad.forEach(m=> typeCounts[m.type] = (typeCounts[m.type]||0)+1);
   const dominantType = Object.keys(typeCounts).reduce((a,b)=> typeCounts[b]>typeCounts[a]?b:a, squad[0].type);
@@ -2778,7 +2817,10 @@ function computeSquadAnalysisUncached(squad){
   const topIssues = undismissed.slice(0,3);
   let benchSuggestion = null;
   const bench = state.collection.filter(m=>!m.favorite);
-  if(weakLinkIssue && topIssues.includes(weakLinkIssue)){
+  if(smallSquadIssue && topIssues.includes(smallSquadIssue)){
+    const strongest = bench.filter(m=>!monsterOnMission(m)).sort((a,b)=>b.level-a.level)[0];
+    if(strongest) benchSuggestion = {monster:strongest, reason:'Your strongest available Skrambeast not already in the squad'};
+  } else if(weakLinkIssue && topIssues.includes(weakLinkIssue)){
     const better = bench.filter(m=>m.level>weakLinkIssue.monster.level).sort((a,b)=>b.level-a.level)[0];
     if(better) benchSuggestion = {monster:better, reason:`Higher level than ${weakLinkIssue.monster.name}`};
   } else if(typeIssue && topIssues.includes(typeIssue)){
@@ -2875,9 +2917,19 @@ function missionReady(slot){
 // Checks whether a running mission has crossed its next unresolved checkpoint, pausing it if so -
 // called on every Missions Log tick and from refreshTabBadges, so this triggers whether or not the
 // player is actually looking at the Missions screen when the moment arrives.
+const MISSION_STUCK_FORFEIT_MS = 12*3600000;
 function updateMissionCheckpoints(){
-  (state.missions||[]).forEach(slot=>{
-    if(!slot || slot.status==='needsBattle') return;
+  state.missions.forEach((slot,i)=>{
+    if(!slot) return;
+    if(slot.status==='needsBattle'){
+      if(Date.now()-slot.pausedAt > MISSION_STUCK_FORFEIT_MS){
+        const monster = state.collection.find(m=>m.id===slot.monsterId);
+        if(monster) monster.tiredUntil = Date.now()+5*60000;
+        state.missions[i] = null;
+        saveState();
+      }
+      return;
+    }
     const idx = slot.checkpointsResolved||0;
     if(idx>=slot.checkpoints.length) return;
     const raw = (Date.now()-slot.startedAt)/slot.durationMs;
@@ -2944,15 +2996,17 @@ function startMissionEncounter(slotIndex, container, onResolve){
     <div class="pixel sm" style="text-align:center;">A ${escapeHtml(opponent.name)} blocks the path!</div>
     <div class="float" style="margin:6px auto;display:flex;justify-content:center;position:relative;" id="missionOppWrap">${monsterSVG(opponent,70)}</div>
     <div class="hp-bar-wrap" style="width:120px;margin:4px auto;"><div class="hp-bar-fill" id="missionOppBar" style="width:100%;"></div></div>
+    <div class="pixel sm" style="text-align:center;">${escapeHtml(opponent.name)}</div>
     ${specialBarHTML('missionSpecial')}
-    <div style="display:flex;justify-content:center;margin:8px auto;"><div class="tap-center" id="missionTapZone"></div></div>
+    <div style="display:flex;justify-content:center;margin:8px auto;"><div class="tap-center" id="missionTapZone"><div class="tap-countdown" id="missionCountdown"></div></div></div>
+    <div style="display:flex;justify-content:center;align-items:center;gap:6px;margin:4px auto;"><div style="width:34px;height:34px;">${monsterSVG(monster,34)}</div></div>
     <div class="hp-bar-wrap" style="width:120px;margin:4px auto;"><div class="hp-bar-fill" id="missionFighterBar" style="width:100%;background:#3f9142;"></div></div>
     <div class="pixel sm" style="text-align:center;">${escapeHtml(monster.name)}</div>
     ${state.settings.autoFighter?`<div class="hint" style="text-align:center;">Auto Fighter is on - this fight will resolve on its own.</div>`:''}
     <div class="battle-log-label">Battle Log</div>
     <div class="battle-log" id="missionBattleLog"></div>`;
   const oppBar=document.getElementById('missionOppBar'), fBar=document.getElementById('missionFighterBar');
-  const logEl=document.getElementById('missionBattleLog'), tapZone=document.getElementById('missionTapZone');
+  const logEl=document.getElementById('missionBattleLog'), tapZone=document.getElementById('missionTapZone'), countdownEl=document.getElementById('missionCountdown');
   function addLog(t){ logEl.innerHTML+=t+'<br>'; logEl.scrollTop=logEl.scrollHeight; }
   const specialCtrl = createSpecialAttackController('missionSpecial', document.getElementById('missionOppWrap'), ()=>{
     if(resolved) return;
@@ -3014,9 +3068,22 @@ function startMissionEncounter(slotIndex, container, onResolve){
     tapZone.removeEventListener('click', onTap);
     onResolve(won);
   }
-  tapZone.addEventListener('click', onTap);
-  autoFighterTimer = maybeStartAutoFighter(onTap);
-  opponentTimer = setInterval(opponentTick, Math.max(550, opponentTickInterval(opponent)));
+  battleCountdownActive = true;
+  const steps=['3','2','1','TAP!']; let si=0;
+  const showStep=()=>{
+    if(si>=steps.length){
+      countdownEl.textContent='';
+      battleCountdownActive = false;
+      tapZone.addEventListener('click', onTap);
+      autoFighterTimer = maybeStartAutoFighter(onTap);
+      opponentTimer = setInterval(opponentTick, Math.max(550, opponentTickInterval(opponent)));
+      return;
+    }
+    countdownEl.textContent=steps[si];
+    countdownEl.classList.remove('cd-pop'); void countdownEl.offsetWidth; countdownEl.classList.add('cd-pop');
+    si++; setTimeout(showStep,750);
+  };
+  showStep();
 }
 function missionTimeRemainingLabel(slot){
   const tier = MISSION_TIERS.find(t=>t.key===slot.tierKey);
@@ -3437,11 +3504,14 @@ let encounter = null;
 
 let noiseTimer = null;
 function stopNoise(){ if(noiseTimer){ clearInterval(noiseTimer); noiseTimer=null; } }
-function startNoise(canvas){
+function startNoise(canvas, blackedOut){
   const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
   const draw = ()=>{
     const img = ctx.createImageData(w,h);
-    for(let i=0;i<img.data.length;i+=4){ const v=Math.random()*255; img.data[i]=v; img.data[i+1]=v; img.data[i+2]=v; img.data[i+3]=255; }
+    for(let i=0;i<img.data.length;i+=4){
+      const v = blackedOut ? (Math.random()<0.08 ? Math.random()*255 : 0) : Math.random()*255;
+      img.data[i]=v; img.data[i+1]=v; img.data[i+2]=v; img.data[i+3]=255;
+    }
     ctx.putImageData(img,0,0);
   };
   draw(); noiseTimer = setInterval(draw, 90);
@@ -3646,7 +3716,7 @@ function idleScreen(){
   const activeSkin = SCANNER_SKINS.find(s=>s.key===(state.scannerCustomization||{}).shell);
   if(activeSkin && activeSkin.key==='matrix') screenEl.insertAdjacentHTML('beforeend', matrixRainHTML());
   if(activeSkin && activeSkin.key==='clear') screenEl.insertAdjacentHTML('beforeend', '<div class="clear-cross-line" style="left:50%;top:0;bottom:0;width:2.5px;transform:translateX(-50%);"></div>');
-  startNoise(document.getElementById('noiseCanvas'));
+  startNoise(document.getElementById('noiseCanvas'), activeSkin && activeSkin.key==='matrix');
   manualRow.style.display='flex'; showIdleButtons();
 }
 function showIdleButtons(){ idleButtonsRow.style.display='flex'; }
@@ -4164,6 +4234,8 @@ function startHiveRun(fighter, container){
     container.innerHTML = `${killHpLabel}<div style="position:relative;">${queenBanner}<div id="hiveBattleHost"></div></div>`;
     runTapBattle(fighter, opponent, document.getElementById('hiveBattleHost'), 'Hive', (result)=>{
       carriedHp = result.remainingFHp;
+      trackBattleResult(result.won, opponent);
+      if(result.oneHitKO){ state.stats.oneHitKOs=(state.stats.oneHitKOs||0)+1; showToast("ONE-HIT KO! Bonus XP and coins"); }
       if(result.won){
         const maxHpNow = effectiveStatsWithBuff(fighter).hp;
         kills++;
@@ -4195,11 +4267,22 @@ function startHiveRun(fighter, container){
         saveState(); checkAchievements();
         showHiveWaveResult(wave, xpGain, coinGain, thisWaveLoot, result.log, maxHpNow);
       } else {
-        endHiveRun(false);
+        showHiveDefeatResult(result.log);
       }
     }, true, carriedHp);
   }
 
+  function showHiveDefeatResult(log){
+    const lastLog = log.slice(-4).join('<br>');
+    container.innerHTML = `
+      <div class="battle-log" style="max-height:90px;">${lastLog}</div>
+      ${celebrationHTML(false,'DEFEATED!')}
+      <div class="hint" style="text-align:center;">${escapeHtml(fighter.name)} couldn't hold on any longer at ${kills} kills.</div>
+      <div class="buttons-row" style="margin-top:22px;"><button class="btn yolk small full" id="hiveDefeatContinueBtn" disabled>Continue</button></div>`;
+    const continueBtn = document.getElementById('hiveDefeatContinueBtn');
+    setTimeout(()=>{ if(continueBtn) continueBtn.disabled = false; }, 600); // settling delay - matches the same tap-momentum fix used elsewhere
+    continueBtn.addEventListener('click', ()=> endHiveRun(false));
+  }
   function showHiveWaveResult(wave, xpGain, coinGain, thisWaveLoot, log, maxHp){
     const atCheckpoint = kills % HIVE_CHECKPOINT_INTERVAL === 0;
     const lastLog = log.slice(-3).join('<br>');
@@ -4209,15 +4292,15 @@ function startHiveRun(fighter, container){
       ${celebrationHTML(true,'WAVE CLEARED!')}
       <div class="hint" style="text-align:center;">+${xpGain} XP · +${formatCoins(coinGain)} coins${lootItem? ' · found '+lootItem.name+'!':''}</div>
       <div class="hint" style="text-align:center;margin-top:2px;">Kills: ${kills} · ${carriedHp}/${maxHp} HP (caught their breath - no full heal)</div>
-      <div class="buttons-row" style="margin-top:22px;"><button class="btn yolk small full" id="hiveWaveContinueBtn" disabled>${atCheckpoint? 'Continue to Checkpoint':'Next Opponent'}</button></div>
-      <div class="buttons-row"><button class="btn cream small full" id="hiveWaveReturnBtn">Return to Arena</button></div>`;
+      <div class="buttons-row" style="margin-top:55px;"><button class="btn yolk small full" id="hiveWaveContinueBtn" disabled>${atCheckpoint? 'Continue to Checkpoint':'Next Opponent'}</button></div>
+      <div class="buttons-row"><button class="btn-hazard small full" id="hiveWaveReturnBtn"><span class="hazard-label">Return to Arena</span></button></div>`;
     const continueBtn = document.getElementById('hiveWaveContinueBtn');
     setTimeout(()=>{ if(continueBtn) continueBtn.disabled = false; }, 600); // settling delay - matches the same tap-momentum fix used for achievement pop-ups
     continueBtn.addEventListener('click', ()=>{
       if(atCheckpoint) showHiveCheckpoint(); else runNextWave();
     });
     document.getElementById('hiveWaveReturnBtn').addEventListener('click', ()=>{
-      showConfirm(`End this Hive run at ${kills} kills? Everything you've earned so far is already safely yours - this just ends your current streak.`, ()=> endHiveRun(true), {confirmLabel:'Yes, exit'});
+      showConfirm(`End this Hive run at ${kills} kills? Everything you've earned so far is already safely yours - this just ends your current streak.`, ()=> endHiveRun(true), {confirmLabel:'Yes, exit', hazard:true});
     });
   }
   function showHiveCheckpoint(){
@@ -4235,7 +4318,7 @@ function startHiveRun(fighter, container){
       <div id="hiveShopList" style="margin-top:6px;"></div>
       <div class="store-item" style="margin-top:6px;"><div class="cat-badge" style="background:#3f9142;">AD</div><div class="sinfo"><div class="sname">Watch Ad for x2 ${offerXpAd?'XP':'Coins'}</div><div class="sdesc">${offerXpAd?'Doubles XP for your whole squad':'Doubles coins earned'} - 2 minutes${adBoostActive?' · already running':''}</div></div><button class="btn tiny yolk" id="hiveCheckpointAdBtn" style="font-size:11px;padding:6px 10px;" ${adBoostActive?'disabled':''}>Watch Ad</button></div>
       <div class="buttons-row"><button class="btn yolk small full" id="hiveContinueBtn">Continue Battle</button></div>
-      <div class="buttons-row"><button class="btn yolk small full" id="hiveExitBtn">Exit Hive</button></div>`;
+      <div class="buttons-row"><button class="btn-hazard small full" id="hiveExitBtn"><span class="hazard-label">Exit Hive</span></button></div>`;
     if(!adBoostActive){
       document.getElementById('hiveCheckpointAdBtn').addEventListener('click', function(){
         const btn = this;
@@ -4279,7 +4362,7 @@ function startHiveRun(fighter, container){
       runNextWave();
     });
     document.getElementById('hiveExitBtn').addEventListener('click', ()=>{
-      showConfirm(`End this Hive run at ${kills} kills? Everything you've earned so far is already safely yours - this just ends your current streak.`, ()=> endHiveRun(true), {confirmLabel:'Yes, exit'});
+      showConfirm(`End this Hive run at ${kills} kills? Everything you've earned so far is already safely yours - this just ends your current streak.`, ()=> endHiveRun(true), {confirmLabel:'Yes, exit', hazard:true});
     });
   }
 
@@ -4871,7 +4954,7 @@ function renderSquadGrid(panel){
   pageItems.forEach(m=>{
     const rs = RARITY_STYLE[m.rarity];
     const tile = document.createElement('div');
-    tile.className = 'tile'+(m.holo?' holo':'')+(isTired(m)?' resting':'');
+    tile.className = 'tile'+(m.holo?' holo':'')+(isTired(m)?' resting':'')+(!m.favorite?' benched':'');
     tile.dataset.rarity = m.rarity;
     tile.style.setProperty('--rarity', rs.color);
     const boostBadgeStr = m.favorite ? ['xp','coin','capture'].map(kind=>{
@@ -4889,6 +4972,7 @@ function renderSquadGrid(panel){
 }
 function releaseMonster(id){
   const m = state.collection.find(x=>x.id===id);
+  if(m && monsterOnMission(m)){ showToast("This Skrambeast is out on a mission - can't release it until it's back"); return; }
   state.collection = state.collection.filter(x=>x.id!==id);
   if(m){
     (m.equipped||[]).forEach(key=>{ state.inventory[key]=(state.inventory[key]||0)+1; });
@@ -4896,6 +4980,11 @@ function releaseMonster(id){
     if(m.armor) state.inventory[m.armor]=(state.inventory[m.armor]||0)+1;
     if(m.costume) state.inventory[m.costume]=(state.inventory[m.costume]||0)+1;
     if(!state.discarded.includes(m.barcode)) state.discarded.push(m.barcode); logAlmanac(m,'shooed');
+    if(isMaxed(m)){
+      if(m.isBoss) state.stats.maxedQueensShooed = (state.stats.maxedQueensShooed||0)+1;
+      else { if(!state.stats.maxedShooedByRarity) state.stats.maxedShooedByRarity={}; state.stats.maxedShooedByRarity[m.rarity] = (state.stats.maxedShooedByRarity[m.rarity]||0)+1; }
+      checkAchievements();
+    }
   }
   saveState(); sfxShoo();
   showToast("Released back into the wild - any gear it wore is back in your inventory");
@@ -4912,7 +5001,7 @@ function closeDetailModal(overlay){
   document.body.style.overflow = '';
   void document.body.offsetHeight; // forces a clean repaint boundary before the next DOM rebuild - see comment on the reported static/interlace glitch
   const panel = document.getElementById('panel');
-  if(currentTab==='collection' && squadSubView==='squad'){ renderSquadGrid(panel); }
+  if(currentTab==='collection' && squadSubView==='squad'){ renderCollection(panel); }
   else renderTab();
 }
 function openDetailModal(m, editable, allowEquip){
@@ -5303,9 +5392,10 @@ function myPublicProfile(){
     hunterXP: state.hunterXP||0,
     dailyXP: Math.max(0, (state.hunterXP||0) - state.dailyXpBaseline.xp),
     weeklyXP: Math.max(0, (state.hunterXP||0) - state.weeklyXpBaseline.xp),
-    maxedCount: state.collection.filter(isMaxed).length,
-    maxedByRarity: RARITY_ORDER.reduce((acc,r)=>{ acc[r] = state.collection.filter(m=> isMaxed(m) && m.rarity===r && !m.isBoss).length; return acc; }, {}),
-    maxedQueens: state.collection.filter(m=> isMaxed(m) && m.isBoss).length,
+    maxedCount: RARITY_ORDER.reduce((sum,r)=> sum+((state.stats.lifetimeMaxedByRarity&&state.stats.lifetimeMaxedByRarity[r])||0), 0) + (state.stats.lifetimeMaxedQueens||0),
+    maxedByRarity: RARITY_ORDER.reduce((acc,r)=>{ acc[r] = (state.stats.lifetimeMaxedByRarity&&state.stats.lifetimeMaxedByRarity[r])||0; return acc; }, {}),
+    maxedQueens: state.stats.lifetimeMaxedQueens||0,
+    skramTags: state.skramTags||{common:0,uncommon:0,rare:0,epic:0,legendary:0},
     lastSeen: now
   };
 }
@@ -5600,6 +5690,12 @@ function showFriendSnapshot(friendPlayerId, pr){
         const trophies = RARITY_ORDER.filter(r=> (mb[r]||0)>0).map(r=> `<div style="display:flex;align-items:center;gap:2px;">${iconTrophy(14,RARITY_STYLE[r].color)}<span class="pixel sm">${mb[r]}</span></div>`);
         if((pr.maxedQueens||0)>0) trophies.push(`<div style="display:flex;align-items:center;gap:2px;">${iconCrown()}<span class="pixel sm">${pr.maxedQueens}</span></div>`);
         return trophies.length ? trophies.join('') : '<div class="hint">None yet</div>';
+      })()}</div>
+      <div class="pixel sm" style="margin-top:6px;">Skram Tags</div>
+      <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">${(()=>{
+        const tags = pr.skramTags||{};
+        const held = MISSION_TIERS.filter(t=> (tags[t.key]||0)>0).map(t=> `<div style="display:flex;align-items:center;gap:2px;">${skramTagSVG(t.color,14)}<span class="pixel sm">${tags[t.key]}</span></div>`);
+        return held.length ? held.join('') : '<div class="hint">None yet</div>';
       })()}</div>
       <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
       <div class="log-row" id="fsHighestRow" style="${pr.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${pr.highest? pr.highest.name+' - Lv.'+pr.highest.level+' ('+(pr.highest.isBoss?'Queen':RARITY_STYLE[pr.highest.rarity].label)+')' : '-'}</div></div></div>
@@ -6237,7 +6333,7 @@ function renderSkins(container, panel){
 }
 function renderCostumes(container, panel){
   container.innerHTML = '';
-  const normal = COSTUME_ITEMS.filter(c=>!c.partyHat && !c.queensCrown);
+  const normal = COSTUME_ITEMS.filter(c=>!c.partyHat && !c.queensCrown && !c.quartermaster);
   buildStoreRows(container, normal, panel, it=>it.desc, iconSparkle(), '#E8542E');
   const section = document.createElement('div'); section.className='section-label'; section.textContent='Collectible - Mystery Treasures';
   container.appendChild(section);
@@ -8518,7 +8614,13 @@ const SPLASH_LINES = [
   "TIRED SKRAMBEASTS RECOVER OVER TIME - ROTATE YOUR SQUAD",
   "SCAN REAL PRODUCTS. EVERY ONE IS DIFFERENT.",
   "RARER TRAITS MEAN RARER MONSTERS",
-  "TRAIN SOLO IN THE ARENA - NO BARCODE NEEDED"
+  "TRAIN SOLO IN THE ARENA - NO BARCODE NEEDED",
+  "SEND YOUR BENCH ON MISSIONS - THEY WON'T SIT IDLE FOREVER",
+  "WIN A MISSION FIGHT, EARN A SKRAM TAG",
+  "THE LINE UP FINDS YOU AN OPPONENT IN SECONDS",
+  "CHALLENGE A FRIEND BY NAME - NO CODE NEEDED",
+  "A QUEEN RAID IS TOUGHER THAN ANY SOLO FIGHT - BRING FRIENDS",
+  "WIN STREAKS EARN A SKULL YOUR OPPONENT CAN SEE"
 ];
 document.getElementById('taglineText').textContent = SPLASH_LINES[Math.floor(Math.random()*SPLASH_LINES.length)];
 idleScreen();
