@@ -203,7 +203,7 @@
   .tile.resting{opacity:.45;}
   .tile.benched{opacity:.7;}
   .tile.on-mission{opacity:.4;}
-  .tile.on-mission::after{content:'';position:absolute;top:3px;right:3px;width:9px;height:9px;border-radius:50%;background:#D4A017;border:1.5px solid #1A1F1C;}
+  .tile.on-mission::after{content:'BUSY';position:absolute;left:0;right:0;bottom:0;background:#1A1F1C;color:#fff;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:8px;letter-spacing:.5px;text-align:center;padding:2px 0;border-radius:0 0 9px 9px;}
   .tile:active{transform:scale(.96);}
   .tile.holo{background:linear-gradient(120deg,#fff 0%, #fdf6e3 30%, #e9f7ff 55%, #fdf6e3 80%, #fff 100%); background-size:280% 280%; animation:holoshine 3.5s linear infinite;}
 
@@ -1077,13 +1077,9 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.9';
+const FIRMWARE_VERSION = '6.11';
 const FIRMWARE_CHANGELOG = [
-  'Fixed a real bug: egg ad-skips were limited to 5 per individual egg, not 5 total - now a single shared count across every egg you\u2019re incubating',
-  'Daily Quest completions now get a real celebration popup matching achievements, instead of a small toast',
-  'Fixed a real bug: opening a Skrambeast\u2019s detail view then switching tabs (instead of closing it first) could leave the whole game permanently unable to scroll, from any screen',
-  'Fixed a real bug: a defeated Queen only ever existed as a temporary variable with no trace in your save - navigating to the Store to buy a Smoker and coming back lost her permanently. She now persists correctly until you actually decide',
-  'Fixed a real bug: capturing the same Queen\u2019s barcode more than once created Skrambeasts that silently shared the exact same internal ID, so releasing one released all of them at once. Recapturing the same Queen is now blocked with a clear message unless you\u2019ve released the earlier one first',
+  'Fixed a real visual conflict: the on-mission indicator dot and the Max Trophy badge both sat in the same top-right corner of a tile. Replaced the dot with a "BUSY" banner across the bottom of the tile instead',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -3166,13 +3162,48 @@ function collectMissionReward(slotIndex){
 }
 function missionSceneSVG(sceneKey){
   const scenes = {
-    meadow: `<ellipse cx="20" cy="55" rx="35" ry="14"/><ellipse cx="65" cy="50" rx="30" ry="12"/><circle cx="15" cy="20" r="2.5"/><circle cx="35" cy="15" r="2.5"/><circle cx="55" cy="22" r="2.5"/><circle cx="78" cy="16" r="2.5"/>`,
-    forest: `<path d="M12 55 L22 25 L32 55 Z"/><path d="M30 58 L42 20 L54 58 Z"/><path d="M52 55 L62 28 L72 55 Z"/><path d="M68 58 L80 22 L92 58 Z"/>`,
-    mountains: `<path d="M0 58 L22 18 L38 38 L55 12 L78 42 L100 58 Z"/>`,
-    coast: `<path d="M0 30 Q10 24 20 30 T40 30 T60 30 T80 30 T100 30" fill="none" stroke-width="3"/><path d="M0 42 Q10 36 20 42 T40 42 T60 42 T80 42 T100 42" fill="none" stroke-width="3"/><circle cx="80" cy="14" r="8"/>`,
-    volcano: `<path d="M20 58 L45 14 L70 58 Z"/><path d="M40 10 L45 2 L50 10 L53 4 L56 12" fill="none" stroke-width="2.5"/>`,
+    meadow: `
+      <rect x="0" y="0" width="100" height="60" fill="#bfe3f7"/>
+      <circle cx="84" cy="12" r="7" fill="#ffd85c"/>
+      <ellipse cx="10" cy="58" rx="40" ry="16" fill="#7bb872"/>
+      <ellipse cx="55" cy="55" rx="45" ry="15" fill="#8fcf7e"/>
+      <ellipse cx="90" cy="58" rx="30" ry="12" fill="#a3dd8f"/>
+      <circle cx="18" cy="46" r="2.3" fill="#ff8fb3"/>
+      <circle cx="30" cy="40" r="2.3" fill="#ffe066"/>
+      <circle cx="46" cy="44" r="2.3" fill="#ff8fb3"/>
+      <circle cx="62" cy="38" r="2.3" fill="#c58cff"/>
+      <circle cx="74" cy="46" r="2.3" fill="#ffe066"/>`,
+    forest: `
+      <rect x="0" y="0" width="100" height="60" fill="#a9d8c4"/>
+      <ellipse cx="50" cy="60" rx="55" ry="10" fill="#6b8a5a"/>
+      <path d="M8 56 L20 22 L32 56 Z" fill="#2f5a3f"/>
+      <path d="M26 58 L40 16 L54 58 Z" fill="#3f7a4f"/>
+      <path d="M48 56 L60 24 L72 56 Z" fill="#2f5a3f"/>
+      <path d="M64 58 L78 18 L92 58 Z" fill="#3f7a4f"/>
+      <rect x="38" y="53" width="4" height="6" fill="#5a3d24"/>
+      <rect x="74" y="53" width="4" height="6" fill="#5a3d24"/>`,
+    mountains: `
+      <rect x="0" y="0" width="100" height="60" fill="#c9d6e8"/>
+      <circle cx="18" cy="14" r="6" fill="#fff" opacity=".8"/>
+      <path d="M0 58 L20 20 L34 36 L48 10 L64 34 L80 16 L100 58 Z" fill="#7c7f9e"/>
+      <path d="M48 10 L54 18 L44 22 Z" fill="#fff"/>
+      <path d="M80 16 L85 23 L76 25 Z" fill="#fff"/>
+      <path d="M0 58 L20 20 L30 32 L14 46 Z" fill="#5e6280"/>
+      <path d="M64 34 L80 16 L88 30 L70 46 Z" fill="#5e6280"/>`,
+    coast: `
+      <rect x="0" y="0" width="100" height="60" fill="#ffd9a8"/>
+      <circle cx="82" cy="16" r="9" fill="#ff9d4d"/>
+      <path d="M0 26 Q10 20 20 26 T40 26 T60 26 T80 26 T100 26 V38 H0 Z" fill="#4fa6d8"/>
+      <path d="M0 36 Q10 30 20 36 T40 36 T60 36 T80 36 T100 36 V44 H0 Z" fill="#3a8bc2"/>
+      <ellipse cx="50" cy="56" rx="55" ry="10" fill="#f2d49b"/>`,
+    volcano: `
+      <rect x="0" y="0" width="100" height="60" fill="#5a2a2a"/>
+      <ellipse cx="50" cy="18" rx="26" ry="8" fill="#7a4a4a" opacity=".7"/>
+      <path d="M14 58 L48 12 L82 58 Z" fill="#2e2320"/>
+      <path d="M48 12 L58 30 L44 36 L52 46 L40 58 L40 48 L48 40 L42 32 Z" fill="#ff8c2e"/>
+      <path d="M40 6 L45 -2 L50 6 L54 -1 L58 7" fill="none" stroke="#6b6b6b" stroke-width="3" opacity=".6"/>`,
   };
-  return `<svg viewBox="0 0 100 60" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;opacity:.14;" fill="#1A1F1C">${scenes[sceneKey]||''}</svg>`;
+  return `<svg viewBox="0 0 100 60" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;opacity:.25;">${scenes[sceneKey]||''}</svg>`;
 }
 function toggleFavorite(m){
   if(monsterOnMission(m)){
