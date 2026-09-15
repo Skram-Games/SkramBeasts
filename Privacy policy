@@ -1,0 +1,162 @@
+Skrambeasts Privacy Policy
+
+Last updated: 15 September 2026
+
+Skrambeasts is a monster-collecting game developed and published by Skram-Games.
+
+This Privacy Policy explains what information Skrambeasts collects, how it is used, and the choices available to players.
+
+1. Information we collect
+
+Skrambeasts is designed to collect as little personal information as reasonably possible.
+
+Game progress and local data
+
+Your individual game progress, including your Skrambeasts, squad, coins, inventory, statistics, settings and other gameplay progress, is stored locally on your device.
+
+The game uses your device's local storage to save this information. This information is not automatically sent to Skram-Games.
+
+Players can use the game's Export/Import Save Code feature to manually transfer their game progress between supported installations or hosting locations.
+
+Online game data
+
+Some features require an internet connection and use Firebase Realtime Database.
+
+These features include:
+
+- Friends and friend requests
+- Global leaderboards
+- Player versus Player matchmaking
+- The Line Up
+- Queen Raids
+
+To support these features, the game uses a randomly generated internal player identifier. This identifier is used to associate online game activity with the correct player.
+
+The game does not require players to provide their real name, postal address or telephone number in order to play.
+
+Display names
+
+Players may use a display username for online features such as friends, matchmaking and leaderboards.
+
+Players should not use their real name, email address, telephone number, home address or other personally identifying information as their display name.
+
+Gameplay information
+
+Information associated with online gameplay may include things such as:
+
+- Hunter Rank and experience
+- Battle statistics
+- Wins, losses and ties
+- Friend connections and requests
+- PvP matchmaking information
+- Queen Raid participation
+- Leaderboard position
+- Other information necessary to operate online game features
+
+This information is used to provide the game's online functionality.
+
+2. Barcodes
+
+Skrambeasts allows players to scan or manually enter product barcodes.
+
+A barcode is used by the game to deterministically generate a Skrambeast. The same barcode produces the same creature for every player.
+
+Skrambeasts does not require the player to provide the name, address or other personal information associated with a product when scanning a barcode.
+
+Barcode information is used for gameplay purposes and is not intended to identify individual players.
+
+3. Camera access
+
+If the Android version of Skrambeasts requests camera access, this is used for the barcode-scanning functionality.
+
+Camera images are processed for the purpose of scanning a barcode. Skrambeasts does not intentionally store photographs or video captured by the barcode scanner.
+
+The game does not require access to your photo library, contacts or precise location to provide its core gameplay.
+
+4. Advertising
+
+The beta version of Skrambeasts currently uses simulated rewarded advertisements for testing purposes.
+
+Before a production version uses a third-party advertising service, the relevant advertising provider's SDK and data practices will be reflected in this Privacy Policy and in the information provided through Google Play.
+
+Where advertising is used, the advertising provider may collect information such as device information, advertising identifiers, IP address and advertising interaction information in accordance with its own privacy policy and applicable law.
+
+Players may be presented with optional rewarded advertisements in exchange for in-game benefits.
+
+5. Firebase
+
+Skrambeasts uses Firebase Realtime Database to provide certain online multiplayer and social features.
+
+Firebase may process information required to operate these services, including identifiers, gameplay information, connection information and technical information associated with requests to the service.
+
+Firebase is provided by Google. Google's handling of information is governed by Google's applicable privacy policies.
+
+6. Analytics and crash reporting
+
+The current version of Skrambeasts does not intentionally collect personal analytics through a separate analytics service.
+
+If analytics, crash reporting or other third-party services are added in a future version, this Privacy Policy will be updated where necessary.
+
+7. Cookies and similar technologies
+
+The core game does not use cookies to identify individual players.
+
+The game uses local device storage to maintain local game progress and settings.
+
+Third-party services used by the game, such as advertising or Firebase, may use their own technologies as described in their respective privacy policies.
+
+8. Children's privacy
+
+Skrambeasts is a general-audience game and is not specifically directed at children under the age of 13.
+
+We do not knowingly collect personal information from children.
+
+If you believe that a child has provided personal information to Skram-Games, please contact us so that we can investigate and take appropriate action.
+
+Parents and guardians should also be aware that some online features allow players to interact through usernames, friends, matchmaking and multiplayer functionality.
+
+9. Data security
+
+We take reasonable measures to protect information used by Skrambeasts and its online services.
+
+However, no internet-based service can be guaranteed to be completely secure.
+
+Players should also avoid using personally identifying information as their in-game display name.
+
+10. Data retention and deletion
+
+Local game data remains on the player's device until it is deleted by the player, the game is removed, the device storage is cleared, or another action removes the stored data.
+
+Online gameplay information may remain in the systems used to operate Skrambeasts for as long as reasonably necessary to provide the relevant services, maintain game functionality, prevent abuse and comply with legal obligations.
+
+If you would like to ask about online data associated with your player identifier, please contact Skram-Games using the contact details below.
+
+11. Third-party services
+
+Skrambeasts may use third-party services to provide particular functionality.
+
+These services may include:
+
+- Firebase / Google Firebase — online game data, friends, leaderboards, matchmaking and multiplayer functionality.
+- Third-party advertising providers — rewarded advertising, where enabled in the production version.
+
+These providers may process information according to their own privacy policies.
+
+12. Changes to this Privacy Policy
+
+We may update this Privacy Policy when Skrambeasts gains new features, services or functionality.
+
+When changes are made, the updated version will be published at the same location as this policy and the "Last updated" date will be changed accordingly.
+
+13. Contact
+
+If you have questions about this Privacy Policy or the handling of information by Skrambeasts, please contact:
+
+Skram-Games
+
+Email: mobile.skram.games@gmail.com
+
+---
+
+Skrambeasts
+A Skram-Games game.
