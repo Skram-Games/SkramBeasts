@@ -774,7 +774,7 @@ const HAS_FIREBASE = !!FIREBASE_DB_URL;
 // This is NOT a secret - Google's own docs are explicit that this key is safe to ship in client code;
 // it only identifies which Firebase project to talk to. The real security boundary is always the
 // Security Rules on the database itself, never this key being hidden.
-const FIREBASE_WEB_API_KEY = 'YOUR_WEB_API_KEY_HERE';
+const FIREBASE_WEB_API_KEY = 'AIzaSyAeHcpNbe9b_GYNVjdpxP_PoNZRhIN9qxE';
 // Stage 1 of the long-term anti-cheat plan: every client signs in anonymously on boot, getting a
 // stable, Firebase-verified UID that (unlike the locally-generated playerId) cannot be spoofed by
 // a raw REST call claiming to be someone else. Deliberately does NOT replace state.playerId - it
@@ -1157,11 +1157,9 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.20';
+const FIRMWARE_VERSION = '6.21';
 const FIRMWARE_CHANGELOG = [
-  'New: a reusable spotlight tour system - dims the whole screen except a live cutout around the real element being explained, with a speech-bubble callout',
-  'First-launch tour walks through what each of the 5 main tabs is for, right after onboarding',
-  'Added a "How to Play" button above Game Secrets to replay it any time',
+  'Firebase Web API Key added - Stage 1/2 anonymous auth and authenticated writes are now live for every client. Security Rules still need to be published separately in the Firebase console before this has any real effect',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
