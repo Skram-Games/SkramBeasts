@@ -203,7 +203,7 @@
   .tile.resting{opacity:.45;}
   .tile.benched{opacity:.7;}
   .tile.on-mission{opacity:.4;}
-  .tile.on-mission::after{content:'BUSY';position:absolute;left:0;right:0;bottom:0;background:#1A1F1C;color:#fff;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:8px;letter-spacing:.5px;text-align:center;padding:2px 0;border-radius:0 0 9px 9px;}
+  .tile.on-mission::after{content:'BUSY';position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);background:rgba(26,31,28,.55);color:#fff;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:9px;letter-spacing:.5px;text-align:center;padding:3px 0;}
   .tile:active{transform:scale(.96);}
   .tile.holo{background:linear-gradient(120deg,#fff 0%, #fdf6e3 30%, #e9f7ff 55%, #fdf6e3 80%, #fff 100%); background-size:280% 280%; animation:holoshine 3.5s linear infinite;}
 
@@ -595,6 +595,8 @@ function achievementIcon(key){
     case 'legendaryExplorer': return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 20 L12 4 L18 20 Z" fill="#fff"/><path d="M9 8 L11 2 L13 8 L15 4 L16 9" fill="none" stroke="#fff" stroke-width="1.4"/></svg>`;
     case 'shooCommon': case 'shooUncommon': case 'shooRare': case 'shooEpic': case 'shooLegendary':
       return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 4h8v16H5z" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M13 12 H21 M17 8 L21 12 L17 16" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    case 'secretSeeker':
+      return `<svg viewBox="0 0 24 24" width="20" height="20"><circle cx="10" cy="10" r="6.5" fill="none" stroke="#fff" stroke-width="2"/><line x1="14.7" y1="14.7" x2="21" y2="21" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>`;
     default: return '';
   }
 }
@@ -760,6 +762,72 @@ const HAS_CLAUDE_STORAGE = (typeof window.storage !== 'undefined' && !!window.st
    showing as unavailable rather than silently failing). */
 const FIREBASE_DB_URL = 'https://skrambeasts-default-rtdb.europe-west1.firebasedatabase.app'; // e.g. 'https://your-project-default-rtdb.firebaseio.com'
 const HAS_FIREBASE = !!FIREBASE_DB_URL;
+// The Web API Key from Firebase Console -> Project Settings -> General -> Your apps -> Web app config.
+// This is NOT a secret - Google's own docs are explicit that this key is safe to ship in client code;
+// it only identifies which Firebase project to talk to. The real security boundary is always the
+// Security Rules on the database itself, never this key being hidden.
+const FIREBASE_WEB_API_KEY = 'YOUR_WEB_API_KEY_HERE';
+// Stage 1 of the long-term anti-cheat plan: every client signs in anonymously on boot, getting a
+// stable, Firebase-verified UID that (unlike the locally-generated playerId) cannot be spoofed by
+// a raw REST call claiming to be someone else. Deliberately does NOT replace state.playerId - it
+// links this new identity TO the existing one instead, so all existing friends, leaderboard history,
+// and pending requests (all keyed by the old playerId) keep working exactly as before. Stage 2 will
+// use this link to enforce real per-player write ownership in Security Rules.
+async function ensureAuthIdentity(){
+  if(!HAS_FIREBASE || FIREBASE_WEB_API_KEY==='YOUR_WEB_API_KEY_HERE') return null;
+  if(state.authUid && state.authIdToken && Date.now()<(state.authTokenExpiresAt||0)){ return state.authUid; }
+  try{
+    if(state.authUid && state.authRefreshToken){
+      const refreshRes = await fetch(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE_WEB_API_KEY}`, {
+        method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: `grant_type=refresh_token&refresh_token=${state.authRefreshToken}`
+      });
+      if(refreshRes.ok){
+        const data = await refreshRes.json();
+        state.authIdToken = data.id_token;
+        state.authRefreshToken = data.refresh_token;
+        state.authTokenExpiresAt = Date.now() + (Number(data.expires_in)||3600)*1000 - 60000; // refresh a minute early
+        saveState();
+        return state.authUid;
+      }
+      // refresh failed (e.g. revoked) - fall through to a fresh anonymous sign-in below
+    }
+    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_WEB_API_KEY}`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({returnSecureToken:true})
+    });
+    if(!res.ok) return null;
+    const data = await res.json();
+    const isNewIdentity = !state.authUid;
+    state.authUid = data.localId;
+    state.authIdToken = data.idToken;
+    state.authRefreshToken = data.refreshToken;
+    state.authTokenExpiresAt = Date.now() + (Number(data.expiresIn)||3600)*1000 - 60000;
+    saveState();
+    if(isNewIdentity){
+      // Best-effort for now - Stage 2's rules make both of these first-claim-only so neither can be
+      // overwritten later. authLink (uid->playerId) lets a rule check "what playerId do I own" from
+      // my own auth.uid directly. playerClaim (playerId->uid) is the reverse lookup, needed so a rule
+      // can check "has this playerId already been claimed by a DIFFERENT uid" before allowing a new
+      // authLink to be created - without it, someone could link their own uid to someone else's
+      // existing playerId and hijack their profile.
+      const myPlayerId = ensurePlayerId();
+      const authParam = state.authIdToken ? `?auth=${state.authIdToken}` : '';
+      try{
+        await fetch(`${FIREBASE_DB_URL}/shared/authLink:${data.localId}.json${authParam}`, {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({playerId: myPlayerId, linkedAt: Date.now()})
+        });
+      }catch(e){}
+      try{
+        await fetch(`${FIREBASE_DB_URL}/shared/playerClaim:${firebaseSafeKey(myPlayerId)}.json${authParam}`, {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({uid: data.localId, claimedAt: Date.now()})
+        });
+      }catch(e){}
+    }
+    return state.authUid;
+  }catch(e){ return null; }
+}
 const HAS_SHARED_BACKEND = HAS_CLAUDE_STORAGE || HAS_FIREBASE;
 if(!HAS_SHARED_BACKEND){
   console.warn('[Skrambeasts] No shared backend configured (FIREBASE_DB_URL is empty). Friends, the Leaderboard, and Player VS Player pairing will NOT work. If this is the Android build, this needs fixing before release - see the ANDROID CONVERSION REQUIREMENT comment near the top of the script.');
@@ -791,7 +859,8 @@ async function storageSet(key, value, shared){
     if(HAS_CLAUDE_STORAGE){ try{ return await window.storage.set(key, value, true); }catch(e){ return null; } }
     if(HAS_FIREBASE){
       try{
-        const res = await fetch(`${FIREBASE_DB_URL}/shared/${firebaseSafeKey(key)}.json`, {
+        const authParam = state.authIdToken ? `?auth=${state.authIdToken}` : '';
+        const res = await fetch(`${FIREBASE_DB_URL}/shared/${firebaseSafeKey(key)}.json${authParam}`, {
           method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({value, updatedAt: Date.now()})
         });
         return res.ok ? {key, value, shared:true} : null;
@@ -808,7 +877,8 @@ async function storageDelete(key, shared){
     if(HAS_CLAUDE_STORAGE){ try{ return await window.storage.delete(key, true); }catch(e){ return null; } }
     if(HAS_FIREBASE){
       try{
-        const res = await fetch(`${FIREBASE_DB_URL}/shared/${firebaseSafeKey(key)}.json`, { method:'DELETE' });
+        const authParam = state.authIdToken ? `?auth=${state.authIdToken}` : '';
+        const res = await fetch(`${FIREBASE_DB_URL}/shared/${firebaseSafeKey(key)}.json${authParam}`, { method:'DELETE' });
         return res.ok ? {key, deleted:true, shared:true} : null;
       }catch(e){ return null; }
     }
@@ -883,6 +953,8 @@ function showDailyLoginPopup(streak, todayKey){
   });
 }
 async function loadState(){
+  await ensureAuthIdentity();
+  setInterval(ensureAuthIdentity, 20*60000);
   const defaultStats = state.stats, defaultSettings = state.settings, defaultDailyLogin = state.dailyLogin, defaultScannerCustomization = state.scannerCustomization;
   try{
     const res = await storageGet('skrambeasts-state', false);
@@ -1077,9 +1149,10 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.11';
+const FIRMWARE_VERSION = '6.18';
 const FIRMWARE_CHANGELOG = [
-  'Fixed a real visual conflict: the on-mission indicator dot and the Max Trophy badge both sat in the same top-right corner of a tile. Replaced the dot with a "BUSY" banner across the bottom of the tile instead',
+  'New achievement: Secret Seeker, for finding the game\u2019s 3 hidden Easter Eggs - tapping its info gives real, specific hints for each one, not just flavour text',
+  'Fixed a real bug: finding an Easter Egg never actually checked for newly-earned achievements at all',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -2034,7 +2107,7 @@ const QUEST_TEMPLATES = [
   {category:'battle', key:'wildWins', base:2, label:n=>`Win ${n} wild battle${n>1?'s':''}`},
   {category:'battle', key:'critHits', base:3, label:n=>`Land ${n} critical hit${n>1?'s':''}`},
   {category:'battle', key:'superEffective', base:2, label:n=>`Land ${n} Super Effective hit${n>1?'s':''}`},
-  {category:'type', key:'diverseSquad', base:3, label:n=>`Field a squad with ${n}+ different types`, stateCheck:true},
+  {category:'type', key:'diverseSquad', base:3, label:n=>`Field a squad with ${n}+ different types`, stateCheck:true, maxTarget:MAX_FAVORITES},
   {category:'capture', key:'newCatches', base:1, label:n=>`Catch ${n} new Skrambeast${n>1?'s':''}`},
   {category:'economy', key:'hatchEgg', base:1, label:n=>`Hatch ${n} egg${n>1?'s':''}`},
   {category:'economy', key:'sellItem', base:1, label:n=>`Sell ${n} item${n>1?'s':''} from your Bag`},
@@ -2056,7 +2129,7 @@ function ensureDailyQuests(){
       const pool = QUEST_TEMPLATES.filter(t=>t.category===cat);
       const template = pool[Math.floor(Math.random()*pool.length)];
       const rawTarget = template.base + Math.floor(rankIdx/4);
-      const target = Math.max(1, Math.round(rawTarget * diff.targetMult));
+      const target = Math.max(1, Math.min(template.maxTarget||Infinity, Math.round(rawTarget * diff.targetMult)));
       return { category:cat, templateKey:template.key, target, difficulty:diff.key, progress:0, completed:false, skipped:false };
     });
     state.dailyQuests = { dateKey: today, quests, skipsUsed:{} };
@@ -2182,6 +2255,7 @@ const ACHIEVEMENT_CATEGORIES = [
   {key:'shooRare', name:'Rare Farewell', desc:'Release maxed Rare Skrambeasts', guide:'Level a Rare Skrambeast to its cap, then release it.', getValue: ()=> state.stats.maxedShooedByRarity&&state.stats.maxedShooedByRarity.rare||0, tiers:[2,8,20,60,150]},
   {key:'shooEpic', name:'Epic Farewell', desc:'Release maxed Epic Skrambeasts', guide:'Level an Epic Skrambeast to its cap, then release it.', getValue: ()=> state.stats.maxedShooedByRarity&&state.stats.maxedShooedByRarity.epic||0, tiers:[1,5,15,40,100]},
   {key:'shooLegendary', name:'Legendary Farewell', desc:'Release maxed Legendary Skrambeasts', guide:'Level a Legendary Skrambeast all the way to its cap, then release it - the hardest tier to let go of.', getValue: ()=> state.stats.maxedShooedByRarity&&state.stats.maxedShooedByRarity.legendary||0, tiers:[1,3,8,20,50]},
+  {key:'secretSeeker', name:'Secret Seeker', desc:'Find hidden Easter Eggs', guide:"Three are hidden in the game, found through unusual interactions rather than normal play. Egg 1: your Profile's 'Secrets Known' badge and the Log tab's own 'Secrets Known' header both seem tappable, and the VS menu's squad artwork might reward a few extra taps. Egg 2: the scanner's four corner screws look touchable, the Friends screen has small dots that might do more than decorate, cycling through several Arena opponents then tapping both fighters could reveal something, and pairing Light Mode with a particular scanner shell might be worth trying. Egg 3: the VS badge itself seems temptable to tap many times in a row, one locked Secret on the Log > Tips page might crack open if held down, the coin counter anywhere in the game might respond to a tap, your best day on the Stats page might have more to say, and capturing a Legendary the honest way completes it.", getValue: ()=> (state.easterEggsFound||[]).length, tiers:[1,2,3]},
   {key:'globalAce', name:'Global Ace', desc:"Rank on the Global leaderboard", guide:"Open Friends > Global to see how you stack up against every hunter, not just your friends. Earning more Hunter XP climbs you higher - the top 20 make the board at all.", getValue: ()=> state.stats.bestGlobalRank ? Math.max(0, 21-state.stats.bestGlobalRank) : 0, tiers:[1,11,16,18,20]},
 ];
 function achievementsUnlockedCount(){
@@ -2234,6 +2308,7 @@ function showAchievementPopup(cat, tierIdx, onClose){
   overlay.innerHTML = `<div class="modal-box" style="max-width:300px;text-align:center;">
     ${celebrationHTML(true,'ACHIEVEMENT UNLOCKED!')}
     <div class="pixel md" style="margin-top:6px;">${cat.name}</div>
+    <div class="hint">${cat.desc}</div>
     <div style="font-family:'Baloo 2',sans-serif;font-weight:800;font-size:20px;color:${color};margin:6px 0;">${tierName}</div>
     <div class="hint">+${formatCoins(reward)} coins</div>
     ${achievementDoubleUsedThisBatch ? '' : `<div class="buttons-row"><button class="btn cream small full" id="achDoubleBtn" disabled>Watch Ad to Double</button></div>`}
@@ -2546,7 +2621,7 @@ function showEasterEggLoot(discoveryNumber){
     <div class="buttons-row"><button class="btn yolk small full" id="lootCloseBtn">Amazing!</button></div>
   </div>`;
   document.body.appendChild(overlay);
-  document.getElementById('lootCloseBtn').addEventListener('click', ()=> overlay.remove());
+  document.getElementById('lootCloseBtn').addEventListener('click', ()=>{ overlay.remove(); checkAchievements(); });
 }
 function hessianBagSVG(size){
   const s = size||130;
@@ -2706,9 +2781,9 @@ const SPECIALIST_EXTRA = [
   {key:'genesisShard', name:'Genesis Shard', desc:'Guarantees your very next catch is Legendary', cost:250000000},
 ];
 const COSTUME_ITEMS = [
-  {key:'championBelt', name:'Champion Belt', desc:'Purely cosmetic - visible on your Skrambeast', cost:150},
-  {key:'heroCape', name:'Hero Cape', desc:'Purely cosmetic - visible on your Skrambeast', cost:180},
-  {key:'coolGlasses', name:'Cool Glasses', desc:'Purely cosmetic - visible on your Skrambeast', cost:120},
+  {key:'championBelt', name:'Champion Belt', desc:"A gleaming belt for a Skrambeast that's earned its bragging rights. Purely cosmetic.", cost:150},
+  {key:'heroCape', name:'Hero Cape', desc:"Billows dramatically in absolutely no wind whatsoever. Purely cosmetic.", cost:180},
+  {key:'coolGlasses', name:'Cool Glasses', desc:"Too cool to actually need eyewear, but that's not the point. Purely cosmetic.", cost:120},
   {key:'queensCrown', name:"Queen's Crown", desc:"A rare trophy from a wild Queen - purely cosmetic, but confuses any Queen you fight while wearing it. Can be sold or traded.", cost:50000, queensCrown:true},
   {key:'partyHatYellow', name:'Yellow Party Hat', desc:'Collectible - mystery box only', cost:0, partyHat:true, color:'#F2E205'},
   {key:'partyHatWhite', name:'White Party Hat', desc:'Collectible - mystery box only', cost:0, partyHat:true, color:'#F5F5F5'},
@@ -3223,11 +3298,11 @@ function toggleFavorite(m){
 /* =========================================================
    CAPTURE MECHANIC
 ========================================================= */
-function captureChance(m, itemBonus, weakenedBonus){
+function captureChance(m, itemBonus, battleCount){
   const cap = MAX_LEVEL_BY_RARITY[m.rarity];
   let chance = CAPTURE_BASE[m.rarity] * (1 - 0.35*(m.level/cap));
-  chance += (itemBonus||0) + (weakenedBonus?0.18:0) + activeBoostMult('capture');
-  return Math.max(0.03, Math.min(0.95, chance));
+  chance += (itemBonus||0) + ((battleCount||0)*0.18) + activeBoostMult('capture');
+  return Math.max(0.03, Math.min(1, chance));
 }
 function coinsForRarity(r){ return {common:20, uncommon:45, rare:90, epic:170, legendary:320}[r] || 20; }
 function arenaCoinReward(level, rarity){
@@ -3946,7 +4021,7 @@ function renderEncounter(wasDiscarded){
     <div class="pixel md">${m.name}</div>
     <div class="pixel sm">${typeIcon(m.type,13)} ${m.typeLabel} · ${rs.label} · Lv.${m.level}</div>
     <div class="stat-row">${statLine(m.stats)}</div>
-    ${encounter.weakened?'<div class="hint">Weakened from battle - easier to catch now.</div>':''}
+    ${encounter.battleCount?`<div class="hint">Weakened from battle x${encounter.battleCount} - capture chance boosted.</div>`:''}
     <div class="hint" style="font-size:9px;">Barcode: ${m.barcode}</div>
   `;
   manualRow.style.display='none'; hideIdleButtons();
@@ -3965,7 +4040,9 @@ function renderEncounter(wasDiscarded){
     row.appendChild(mkBtn('yolk small','Back', backToIdle));
   } else {
     row.appendChild(mkBtn('yolk small','Try to Catch', openCaptureScreen));
-    row.appendChild(mkBtn('cream small','Battle First', ()=> battleEncounter(true)));
+    const battleBtn = mkBtn('cream small','Battle', ()=> battleEncounter(true));
+    if(captureChance(m, 0, encounter.battleCount||0)>=1) battleBtn.disabled = true;
+    row.appendChild(battleBtn);
     row.appendChild(mkBtn('cream small','Shoo', confirmShooEncounter));
     row.appendChild(mkBtn('yolk small','Back', backToIdle));
   }
@@ -4028,7 +4105,7 @@ function openCaptureScreen(){
   const updateChance = ()=>{
     const key = document.getElementById('captureItemSelect').value;
     const bonus = key? CAPTURE_ITEMS.find(i=>i.key===key).bonus : 0;
-    document.getElementById('chanceLabel').textContent = 'Capture chance: '+Math.round(captureChance(m,bonus,encounter.weakened)*100)+'%';
+    document.getElementById('chanceLabel').textContent = 'Capture chance: '+Math.round(captureChance(m,bonus,encounter.battleCount||0)*100)+'%';
   };
   document.getElementById('captureItemSelect').addEventListener('change', updateChance);
   updateChance();
@@ -4044,7 +4121,7 @@ function attemptCapture(){
   const item = key? CAPTURE_ITEMS.find(i=>i.key===key) : null;
   const bonus = item ? item.bonus : 0;
   if(key) state.inventory[key] = Math.max(0,(state.inventory[key]||0)-1);
-  const chance = captureChance(m, bonus, encounter.weakened);
+  const chance = captureChance(m, bonus, encounter.battleCount||0);
   const success = (item && item.guaranteed) ? true : Math.random() < chance;
   if(success){
     sfxCaptureSuccess();
@@ -4660,7 +4737,7 @@ function proceedBattleEncounter(fighter, isCaptureFlow){
     const leveled = grantXP(fighter, baseXp);
     if(result.won) addCoins(Math.round(coinsForRarity(wild.rarity)*koBonus));
     if(result.oneHitKO){ state.stats.oneHitKOs=(state.stats.oneHitKOs||0)+1; showToast("ONE-HIT KO! Bonus XP and coins"); }
-    if(isCaptureFlow && result.won) encounter.weakened = true;
+    if(isCaptureFlow && result.won) encounter.battleCount = (encounter.battleCount||0)+1;
     saveState();
     finishEncounterBattle(fighter, wild, result.won, leveled, isCaptureFlow, result.oneHitKO, baseXp);
   });
@@ -4791,12 +4868,14 @@ function renderSquadTab(panel){
       <button class="btn ${squadSubView==='squad'?'yolk':'cream'} small" id="squadModeSquad">SQUAD</button>
       <button class="btn ${squadSubView==='friends'?'yolk':'cream'} small" id="squadModeFriends" style="position:relative;">FRIENDS${friendRequestBadgeCount>0?`<span class="tab-badge" style="display:flex;">${Math.min(9,friendRequestBadgeCount)}</span>`:''}</button>
       <button class="btn ${squadSubView==='missions'?'yolk':'cream'} small" id="squadModeMissions" style="position:relative;">MISSIONS${missionsReadyCount>0?`<span class="tab-badge" style="display:flex;">${missionsReadyCount}</span>`:''}</button>
+      <button class="btn cream small" id="squadModeTrain">TRAIN</button>
     </div>
     <div id="squadInner" style="margin-top:10px;"></div>`;
   document.getElementById('squadModeProfile').addEventListener('click', ()=>{ squadSubView='profile'; renderSquadTab(panel); });
   document.getElementById('squadModeSquad').addEventListener('click', ()=>{ squadSubView='squad'; renderSquadTab(panel); });
   document.getElementById('squadModeFriends').addEventListener('click', ()=>{ squadSubView='friends'; renderSquadTab(panel); });
   document.getElementById('squadModeMissions').addEventListener('click', ()=>{ squadSubView='missions'; missionSubView='log'; renderSquadTab(panel); });
+  document.getElementById('squadModeTrain').addEventListener('click', ()=>{ versusCategory='arena'; switchTab('versus'); });
   const inner = document.getElementById('squadInner');
   if(squadSubView==='profile') renderProfile(inner, panel);
   else if(squadSubView==='friends') renderFriendsList(inner);
@@ -5116,7 +5195,7 @@ function openDetailModal(m, editable, allowEquip){
   const xpBar = editable? `<div class="xp-bar"><div class="xp-fill" style="width:${m.level>=cap?100:Math.round(100*m.xp/xpToNext(m.level))}%"></div></div><div class="hint" style="text-align:center;">${m.level>=cap?'MAX LEVEL':'XP '+m.xp+' / '+xpToNext(m.level)}</div>` : '';
   overlay.innerHTML = `
     <div class="modal-box">
-      <button class="modal-close" id="modalClose">${iconClose()}</button>
+      <button class="modal-close" id="modalFavStar" aria-label="Favourite">${iconStar(m.favorite)}</button>
       <div class="hint" id="modalBoostTimer" style="position:absolute;top:16px;right:42px;color:#9B5DE5;font-weight:700;text-align:right;"></div>
       <div class="mini-svg float" id="modalIcon" style="width:110px;height:110px;margin:0 auto;border-radius:50%;display:flex;justify-content:center;align-items:center;${auraStyle(m)}">${monsterSVG(m,110)}</div>
       ${editable? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;"><div class="pixel md" id="modalNameDisplay">${escapeHtml(m.name)}</div><button class="btn tiny cream" id="modalRenameBtn" style="padding:3px 7px;font-size:12px;" aria-label="Rename">✏</button></div>` : `<div class="pixel md" style="text-align:center;">${m.name}</div>`}
@@ -5149,7 +5228,9 @@ function openDetailModal(m, editable, allowEquip){
     overlay._boostTimerInterval = modalBoostTimer;
   }
   overlay.addEventListener('click', e=>{ if(e.target===overlay) closeDetailModal(overlay); });
-  document.getElementById('modalClose').addEventListener('click', ()=> closeDetailModal(overlay));
+  document.getElementById('modalFavStar').addEventListener('click', ()=>{
+    if(toggleFavorite(m)) document.getElementById('modalFavStar').innerHTML = iconStar(m.favorite);
+  });
   if(editable){
     const renameBtn = document.getElementById('modalRenameBtn');
     renameBtn.addEventListener('click', ()=>{
@@ -5217,10 +5298,10 @@ function renderModalActions(container, m, overlay, allowEquip){
     ${equipSections}
     <div class="equip-row"><span class="equip-label">Potions</span><div class="potion-box" style="margin:0;">${POTION_ITEMS.map(p=>`<button class="potion-btn" data-potion="${p.key}" ${(state.inventory[p.key]||0)>0?'':'disabled'}>${p.name.split(' ')[0]} (${state.inventory[p.key]||0})</button>`).join('')}</div></div>
     <div class="buttons-row" style="margin-top:8px;">
-      <button class="btn cream small" id="modalFavBtn">${m.favorite?'Unfavourite':'Favourite'}</button>
-      <button class="btn cream small" id="modalShooBtn">Shoo</button>
+      <button class="btn-hazard small" id="modalShooBtn"><span class="hazard-label">Shoo</span></button>
+      <button class="btn cream small" id="modalBackBtn">Back</button>
     </div>`;
-  document.getElementById('modalFavBtn').addEventListener('click', ()=>{ toggleFavorite(m); renderModalActions(container,m,overlay,allowEquip); });
+  document.getElementById('modalBackBtn').addEventListener('click', ()=> closeDetailModal(overlay));
   document.getElementById('modalShooBtn').addEventListener('click', ()=>{
     const proceedToRelease = ()=>{
       showConfirm(`Release ${m.name} for good? This can't be undone.`, ()=>{
@@ -5375,7 +5456,7 @@ async function sendFriendRequest(targetId, targetName){
   const entry = { senderId: myId, senderName: state.hunterName||'Hunter', timestamp: Date.now() };
   if(HAS_CLAUDE_STORAGE){ try{ await window.storage.set(`friendReq:${targetId}:${myId}`, JSON.stringify(entry), true); return true; }catch(e){ return false; } }
   if(HAS_FIREBASE){
-    try{ const res = await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(targetId)}/${firebaseSafeKey(myId)}.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry) }); return res.ok; }
+    try{ const res = await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(targetId)}/${firebaseSafeKey(myId)}.json${state.authIdToken?"?auth="+state.authIdToken:""}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry) }); return res.ok; }
     catch(e){ return false; }
   }
   return false;
@@ -5415,14 +5496,14 @@ async function acceptFriendRequest(senderId, senderName){
     return;
   }
   if(HAS_FIREBASE){
-    try{ await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(myId)}/${firebaseSafeKey(senderId)}.json`, { method:'DELETE' }); }catch(e){}
-    try{ await fetch(`${FIREBASE_DB_URL}/shared/friendAcceptedBy/${firebaseSafeKey(senderId)}/${firebaseSafeKey(myId)}.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(markerEntry) }); }catch(e){}
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(myId)}/${firebaseSafeKey(senderId)}.json${state.authIdToken?"?auth="+state.authIdToken:""}`, { method:'DELETE' }); }catch(e){}
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/friendAcceptedBy/${firebaseSafeKey(senderId)}/${firebaseSafeKey(myId)}.json${state.authIdToken?"?auth="+state.authIdToken:""}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(markerEntry) }); }catch(e){}
   }
 }
 async function declineFriendRequest(senderId){
   const myId = ensurePlayerId();
   if(HAS_CLAUDE_STORAGE){ try{ await window.storage.delete(`friendReq:${myId}:${senderId}`, true); }catch(e){} return; }
-  if(HAS_FIREBASE){ try{ await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(myId)}/${firebaseSafeKey(senderId)}.json`, { method:'DELETE' }); }catch(e){} }
+  if(HAS_FIREBASE){ try{ await fetch(`${FIREBASE_DB_URL}/shared/friendReq/${firebaseSafeKey(myId)}/${firebaseSafeKey(senderId)}.json${state.authIdToken?"?auth="+state.authIdToken:""}`, { method:'DELETE' }); }catch(e){} }
 }
 async function checkFriendAcceptedMarkers(){
   const myId = ensurePlayerId();
@@ -5454,7 +5535,7 @@ async function checkFriendAcceptedMarkers(){
     if(existing){ if(existing.status==='pending'){ existing.status='accepted'; anyUpgraded=true; } }
     else { state.friends.push({playerId:entry.accepterId, status:'accepted'}); anyUpgraded=true; }
     if(HAS_CLAUDE_STORAGE){ try{ await window.storage.delete(entry.key, true); }catch(e){} }
-    else if(HAS_FIREBASE){ try{ await fetch(`${FIREBASE_DB_URL}/shared/friendAcceptedBy/${firebaseSafeKey(myId)}/${firebaseSafeKey(entry.accepterId)}.json`, {method:'DELETE'}); }catch(e){} }
+    else if(HAS_FIREBASE){ try{ await fetch(`${FIREBASE_DB_URL}/shared/friendAcceptedBy/${firebaseSafeKey(myId)}/${firebaseSafeKey(entry.accepterId)}.json${state.authIdToken?"?auth="+state.authIdToken:""}`, {method:'DELETE'}); }catch(e){} }
   }
   if(anyUpgraded){ saveState(); checkAchievements(); }
   return anyUpgraded;
@@ -6130,7 +6211,7 @@ function renderStatsPanel(container, panel){
     ()=>{
       return `
         <div class="section-label">Bosses</div>
-        ${state.activeBoss ? `<div class="log-row" id="queenWaitingRow" style="cursor:pointer;"><div class="log-info"><div class="log-name">QUEEN STATUS</div></div><div class="log-status" style="background:#D4A017;">Ready! (Tap)</div></div>` : (()=>{ const tf=state.lifetimeBattlesTowardBoss||0; const nextThreshold=(Math.floor(tf/BOSS_BATTLE_THRESHOLD)+1)*BOSS_BATTLE_THRESHOLD; return row('Progress to next Queen', `${tf}/${nextThreshold}`, '#9B5DE5'); })()}
+        ${state.activeBoss ? `<div class="log-row" id="queenWaitingRow" style="cursor:pointer;"><div class="log-info"><div class="log-name">QUEEN STATUS</div></div><div class="log-status" style="background:#D4A017;">Ready! (Tap)</div></div>` : (()=>{ const tf=state.lifetimeBattlesTowardBoss||0; const pct=Math.round(((tf % BOSS_BATTLE_THRESHOLD)/BOSS_BATTLE_THRESHOLD)*100); return row('Progress to next Queen', `${pct}%`, '#9B5DE5'); })()}
         ${row('Bosses encountered', s.bossesEncountered, '#a13a24')}
         ${row('Wild Boss Wins', s.bossWins, '#3f6b4a')}
         ${row('Boss Training Wins', s.bossTrainingWins||0, '#3f6b4a')}
@@ -6169,16 +6250,19 @@ function renderStatsPanel(container, panel){
     },
     ()=>{
       const byTier = s.missionsCompletedByTier||{};
-      const tags = state.skramTags||{};
-      const totalTags = MISSION_TIERS.reduce((sum,t)=> sum+(tags[t.key]||0), 0);
       return `
         <div class="section-label">Missions</div>
         ${row('Missions Completed', s.missionsCompleted||0, '#8FA998')}
         ${MISSION_TIERS.map(t=> row(`${t.name} Missions`, byTier[t.key]||0, t.color)).join('')}
         ${row('Encounters Won', s.missionEncountersWon||0, '#3f9142')}
         ${row('Encounters Retreated', s.missionEncountersRetreated||0, '#a13a24')}
-        ${row('Legendary Missions Survived', s.legendaryMissionsSurvived||0, '#D4A017')}
-        <div class="section-label" style="margin-top:6px;">Skram Tags</div>
+        ${row('Legendary Missions Survived', s.legendaryMissionsSurvived||0, '#D4A017')}`;
+    },
+    ()=>{
+      const tags = state.skramTags||{};
+      const totalTags = MISSION_TIERS.reduce((sum,t)=> sum+(tags[t.key]||0), 0);
+      return `
+        <div class="section-label">Skram Tags</div>
         ${MISSION_TIERS.map(t=> row(`${t.name} Tags`, tags[t.key]||0, t.color)).join('')}
         ${row('Total Tags Held', totalTags, '#8FA998')}`;
     }
@@ -6239,23 +6323,8 @@ function renderBag(panel){
   const catalog = allItemCatalogs();
   const owned = catalog.filter(it=> (state.inventory[it.key]||0)>0);
   const hasSellable = owned.some(it=>!it.noSell);
-  const tags = state.skramTags||{common:0,uncommon:0,rare:0,epic:0,legendary:0};
-  const hasTags = MISSION_TIERS.some(t=>tags[t.key]>0);
   panel.innerHTML = `<div class="top-bar"><div class="pixel sm">YOUR BAG</div><div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div></div><div class="buttons-row" style="margin-top:0;"><button class="btn tiny yolk full" id="bagBackBtn">Back</button></div>
-    ${hasTags?`<div class="section-label">Skram Tags</div><div id="bagTagsList"></div>`:''}
     <div class="page-bar" id="bagPageBar"></div><div id="bagList"></div>${hasSellable?`<div class="buttons-row" id="bagSellAllRow"><button class="btn tiny coral full" id="bagSellAllBtn">Sell All</button></div>`:''}`;
-  if(hasTags){
-    document.getElementById('bagTagsList').innerHTML = MISSION_TIERS.filter(t=>tags[t.key]>0).map(t=> `<div class="log-row" style="justify-content:space-between;"><span style="display:flex;align-items:center;gap:4px;">${skramTagSVG(t.color,16)}<span class="log-name">${t.name} x${tags[t.key]}</span></span><button class="btn tiny cream" data-sell-tag="${t.key}">Sell all for ${formatCoins(skramTagSellValue(t.key)*tags[t.key])}</button></div>`).join('');
-    document.getElementById('bagTagsList').querySelectorAll('[data-sell-tag]').forEach(btn=> btn.addEventListener('click', ()=>{
-      const key = btn.dataset.sellTag;
-      const count = state.skramTags[key]||0;
-      const value = skramTagSellValue(key)*count;
-      state.skramTags[key] = 0;
-      addCoins(value); sfxCoin(); saveState();
-      showToast(`Sold for ${formatCoins(value)} coins`);
-      renderBag(panel);
-    }));
-  }
   document.getElementById('bagBackBtn').addEventListener('click', ()=>{ storeCategory=null; renderStore(panel); });
   if(owned.length===0){ document.getElementById('bagList').innerHTML = `<div class="empty-state">BAG EMPTY<br><span style="font-weight:400;font-size:12px;">Buy something from the Store to see it here.</span></div>`; return; }
   if(hasSellable) document.getElementById('bagSellAllBtn').addEventListener('click', ()=>{
@@ -6349,7 +6418,7 @@ function renderStore(panel){
   const pouchHTML = storeCategory==='quartermaster'
     ? `<div style="display:flex;gap:5px;align-items:center;">${MISSION_TIERS.map(t=>`<span style="display:flex;align-items:center;gap:1px;">${skramTagSVG(t.color,13)}<span style="font-size:9px;font-family:'Baloo 2',sans-serif;font-weight:700;">${(tags[t.key]||0)>999?Math.floor((tags[t.key]||0)/1000)+'k':(tags[t.key]||0)}</span></span>`).join('')}</div>`
     : `<div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div>`;
-  panel.innerHTML = `<div class="top-bar"><div class="pixel sm">${cat.name.toUpperCase()}</div>${pouchHTML}</div><div class="buttons-row" style="margin-top:0;"><button class="btn tiny yolk full" id="storeBackBtn">Back</button></div><div class="page-bar" id="storeItemPageBar" style="margin-top:4px;"></div><div id="storeItemList"></div>`;
+  panel.innerHTML = `<div class="top-bar"><div class="pixel sm">${cat.name.toUpperCase()}</div>${pouchHTML}</div><div class="buttons-row" style="margin-top:0;"><button class="btn tiny yolk full" id="storeBackBtn">Back</button></div><div class="hint" style="text-align:center;margin-top:4px;">Tap an item for more details.</div><div class="page-bar" id="storeItemPageBar" style="margin-top:4px;"></div><div id="storeItemList"></div>`;
   document.getElementById('storeBackBtn').addEventListener('click', ()=>{ storeCategory=null; renderStore(panel); });
   const list = document.getElementById('storeItemList');
   if(storeCategory==='specialist'){ renderSpecialist(list, panel); return; }
@@ -6399,7 +6468,7 @@ function renderSkins(container, panel){
     const owned = (state.ownedSkins||[]).includes(skin.key);
     return `<div class="store-item" style="padding:5px 8px;">
       <div class="cat-badge bezel ${skin.bezelClass}" style="width:22px;height:22px;border-radius:6px;position:relative;overflow:hidden;" data-skin-info="${skin.key}"></div>
-      <div class="sinfo" style="cursor:pointer;" data-skin-info="${skin.key}"><div class="sname" style="font-size:12px;">${skin.name}</div><div class="sdesc" style="font-size:10px;">${skin.desc}${owned?' - equip from Settings > Customize Scanner':''}</div></div>
+      <div class="sinfo" style="cursor:pointer;" data-skin-info="${skin.key}"><div class="sname" style="font-size:12px;">${skin.name}${owned?` <span class="sowned">Owned</span>`:''}</div></div>
       <button class="btn tiny yolk" data-buy-skin="${skin.key}" ${owned?'disabled':''}>${owned?'Owned':formatCoins(skin.cost)}</button>
     </div>`;
   }).join('');
@@ -6511,7 +6580,7 @@ function buildStoreRows(container, items, panel, descFn, icon, color, itemIconFn
     const itemIcon = itemIconFn ? itemIconFn(it) : icon;
     const row = document.createElement('div'); row.className='store-item';
     row.innerHTML = `<div class="cat-badge" style="background:${color}; border:3px solid ${outline};">${itemIcon}</div>
-      <div class="sinfo" style="cursor:pointer;"><div class="sname">${it.name}${owned?` <span class="sowned">×${owned}</span>`:''}</div><div class="sdesc">${descFn(it)}</div></div>
+      <div class="sinfo" style="cursor:pointer;"><div class="sname">${it.name}${owned?` <span class="sowned">×${owned}</span>`:''}</div></div>
       <button class="btn tiny yolk" style="font-size:11px;padding:6px 10px;">${iconCoin()} ${formatCoins(it.cost)}</button>`;
     row.querySelector('.sinfo').addEventListener('click', ()=> showItemDetailPopup(it, descFn, itemIcon, color));
     row.querySelector('button').addEventListener('click', ()=>{
@@ -6661,12 +6730,16 @@ const QUARTERMASTER_ITEMS = [
 ];
 function renderQuartermaster(container, panel){
   const tags = state.skramTags||{common:0,uncommon:0,rare:0,epic:0,legendary:0};
+  const hasTags = MISSION_TIERS.some(t=>tags[t.key]>0);
   container.innerHTML = QUARTERMASTER_ITEMS.map(it=>{
     const tier = MISSION_TIERS.find(t=>t.key===it.tierKey);
     const owned = it.type==='costume' && (state.inventory[it.costumeKey]||0)>0;
     const canAfford = (tags[it.tierKey]||0)>=it.tagCost;
     return `<div class="store-item"><div class="cat-badge" style="background:${tier.color};">${skramTagSVG('#fff',18)}</div><div class="sinfo"><div class="sname">${it.name}</div><div class="sdesc">${it.desc}</div></div><button class="btn tiny ${owned?'cream':'yolk'}" data-qm-buy="${it.key}" style="flex:none;width:auto;padding:6px 10px;display:flex;align-items:center;gap:4px;" ${owned||!canAfford?'disabled':''}>${owned?'Owned':`${skramTagSVG(tier.color,14)}<span>${it.tagCost}</span>`}</button></div>`;
   }).join('');
+  if(hasTags){
+    container.innerHTML += `<div class="buttons-row" style="margin-top:10px;"><button class="btn tiny cream full" id="qmSellTagsBtn">Sell Tags</button></div><div id="qmSellTagsList" style="display:none;margin-top:6px;"></div>`;
+  }
   container.querySelectorAll('[data-qm-buy]').forEach(btn=> btn.addEventListener('click', ()=>{
     const it = QUARTERMASTER_ITEMS.find(q=>q.key===btn.dataset.qmBuy);
     if((state.skramTags[it.tierKey]||0)<it.tagCost){ showToast("Not enough Tags"); return; }
@@ -6684,6 +6757,23 @@ function renderQuartermaster(container, panel){
     sfxCoin(); saveState();
     renderQuartermaster(container, panel);
   }));
+  const sellBtn = document.getElementById('qmSellTagsBtn');
+  if(sellBtn) sellBtn.addEventListener('click', ()=>{
+    const list = document.getElementById('qmSellTagsList');
+    const showing = list.style.display!=='none';
+    if(showing){ list.style.display='none'; return; }
+    list.style.display='block';
+    list.innerHTML = MISSION_TIERS.filter(t=>tags[t.key]>0).map(t=> `<div class="log-row" style="justify-content:space-between;"><span style="display:flex;align-items:center;gap:4px;">${skramTagSVG(t.color,16)}<span class="log-name">${t.name} x${tags[t.key]}</span></span><button class="btn tiny coral" data-sell-tag="${t.key}">Sell all for ${formatCoins(skramTagSellValue(t.key)*tags[t.key])}</button></div>`).join('');
+    list.querySelectorAll('[data-sell-tag]').forEach(btn=> btn.addEventListener('click', ()=>{
+      const key = btn.dataset.sellTag;
+      const count = state.skramTags[key]||0;
+      const value = skramTagSellValue(key)*count;
+      state.skramTags[key] = 0;
+      addCoins(value); sfxCoin(); saveState();
+      showToast(`Sold for ${formatCoins(value)} coins`);
+      renderQuartermaster(container, panel);
+    }));
+  });
 }
 function renderSpecialist(container, panel){
   const pool = [
@@ -7253,13 +7343,13 @@ function renderArenaVsRow(container, battleHost){
   container.innerHTML = `
     <div class="arena-vs-cols">
       <div class="arena-vs-col" id="arenaPlayerCol">${fighter
-        ? `<div class="float" style="width:70px;height:70px;margin:0 auto;">${monsterSVG(fighter,70)}</div><div class="pixel sm">${fighter.name}</div><div class="hint">${fighter.isBoss?'Queen':RARITY_STYLE[fighter.rarity].label} · Lv.${fighter.level}</div>`
+        ? `<div class="float" style="width:70px;height:70px;margin:0 auto;">${monsterSVG(fighter,70)}</div><div class="pixel sm">${fighter.name}</div><div class="hint">${typeIcon(fighter.type,13)} ${fighter.isBoss?'Queen':RARITY_STYLE[fighter.rarity].label} · Lv.${fighter.level}</div>`
         : `<div class="hint">${allTired?'Whole squad resting':'Pick a fighter above'}</div>${allTired?`<div class="hint" id="arenaRestCountdown" style="font-weight:700;">Ready in ${Math.floor(Math.max(0,soonestReadyMs)/60000)}:${Math.ceil((Math.max(0,soonestReadyMs)%60000)/1000).toString().padStart(2,'0')}</div>`:''}`}</div>
       <div class="arena-vs-badge">VS</div>
       <div class="arena-vs-col${easterEggStepDone('egg2','c')?' cracked-glass':''}" id="arenaOpponentCol">
         <div class="float" style="width:70px;height:70px;margin:0 auto;${auraStyle(arenaOpponent)}">${monsterSVG(arenaOpponent,70)}</div>
         <div class="pixel sm">${arenaOpponent.name}</div>
-        <div class="hint">${RARITY_STYLE[arenaOpponent.rarity].label} · Lv.${arenaOpponent.level}</div>
+        <div class="hint">${typeIcon(arenaOpponent.type,13)} ${RARITY_STYLE[arenaOpponent.rarity].label} · Lv.${arenaOpponent.level}</div>
       </div>
     </div>
     <div class="buttons-row"><button class="btn coral small full" id="arenaFightBtn" ${(!fighter||allTired)?'disabled':''}>Train (Battle)</button></div>
@@ -7758,14 +7848,14 @@ async function setLineupPresence(){
   const entry = { playerId: myId, name: state.hunterName||'Hunter', timestamp: Date.now() };
   if(HAS_CLAUDE_STORAGE){ try{ await window.storage.set('lineup:'+myId, JSON.stringify(entry), true); }catch(e){} return; }
   if(HAS_FIREBASE){
-    try{ await fetch(`${FIREBASE_DB_URL}/shared/lineup/${firebaseSafeKey(myId)}.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry) }); }catch(e){}
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/lineup/${firebaseSafeKey(myId)}.json${state.authIdToken?"?auth="+state.authIdToken:""}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry) }); }catch(e){}
   }
 }
 async function removeLineupPresence(){
   const myId = ensurePlayerId();
   if(HAS_CLAUDE_STORAGE){ try{ await window.storage.delete('lineup:'+myId, true); }catch(e){} return; }
   if(HAS_FIREBASE){
-    try{ await fetch(`${FIREBASE_DB_URL}/shared/lineup/${firebaseSafeKey(myId)}.json`, { method:'DELETE' }); }catch(e){}
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/lineup/${firebaseSafeKey(myId)}.json${state.authIdToken?"?auth="+state.authIdToken:""}`, { method:'DELETE' }); }catch(e){}
   }
 }
 let lineupPollTimer = null, lineupHeartbeatTimer = null, lineupSeenRequestCode = null;
@@ -7892,13 +7982,13 @@ async function fetchRaidDoc(code){
 async function saveRaidDoc(code, doc){
   if(HAS_CLAUDE_STORAGE){ try{ await window.storage.set('raid:'+code, JSON.stringify(doc), true); }catch(e){} return; }
   if(HAS_FIREBASE){
-    try{ await fetch(`${FIREBASE_DB_URL}/shared/raids/${firebaseSafeKey(code)}.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(doc) }); }catch(e){}
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/raids/${firebaseSafeKey(code)}.json${state.authIdToken?"?auth="+state.authIdToken:""}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(doc) }); }catch(e){}
   }
 }
 async function deleteRaidDoc(code){
   if(HAS_CLAUDE_STORAGE){ try{ await window.storage.delete('raid:'+code, true); }catch(e){} return; }
   if(HAS_FIREBASE){
-    try{ await fetch(`${FIREBASE_DB_URL}/shared/raids/${firebaseSafeKey(code)}.json`, { method:'DELETE' }); }catch(e){}
+    try{ await fetch(`${FIREBASE_DB_URL}/shared/raids/${firebaseSafeKey(code)}.json${state.authIdToken?"?auth="+state.authIdToken:""}`, { method:'DELETE' }); }catch(e){}
   }
 }
 const RAID_LOBBY_STALE_MS = 10*60000;
