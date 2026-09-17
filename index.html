@@ -273,6 +273,14 @@
 
   /* Detail modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(10,14,12,.65); display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;}
+  .tour-overlay{position:fixed; inset:0; z-index:9999;}
+  .tour-hole{position:fixed; border-radius:14px; box-shadow:0 0 0 9999px rgba(10,14,12,.82); pointer-events:none; transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease;}
+  .tour-bubble{position:fixed; max-width:250px; background:#fff; border:2.5px solid #1A1F1C; border-radius:14px; padding:12px; box-shadow:0 4px 10px rgba(0,0,0,.35); z-index:10000; left:50%; transform:translateX(-50%);}
+  .tour-arrow{position:absolute; left:50%; transform:translateX(-50%); width:0; height:0;}
+  .tour-arrow-up{top:-9px; border-left:9px solid transparent; border-right:9px solid transparent; border-bottom:9px solid #fff;}
+  .tour-arrow-up::after{content:''; position:absolute; top:1px; left:-11px; width:0; height:0; border-left:11px solid transparent; border-right:11px solid transparent; border-bottom:11px solid #1A1F1C; z-index:-1;}
+  .tour-arrow-down{bottom:-9px; border-left:9px solid transparent; border-right:9px solid transparent; border-top:9px solid #fff;}
+  .tour-arrow-down::after{content:''; position:absolute; bottom:1px; left:-11px; width:0; height:0; border-left:11px solid transparent; border-right:11px solid transparent; border-top:11px solid #1A1F1C; z-index:-1;}
   .modal-box{background:var(--cream); border-radius:16px; padding:16px; width:100%; max-width:340px; max-height:88vh; overflow-y:auto; position:relative; box-shadow:0 20px 50px rgba(0,0,0,.4); margin-top:-64px;}
   .modal-close{position:absolute; top:10px; right:10px; background:#fff; border:1.5px solid #0d2027; border-radius:50%; width:26px; height:26px; display:flex; align-items:center; justify-content:center; cursor:pointer;}
   .modal-name{display:block; margin:4px auto 0; text-align:center; font-family:'Baloo 2'; font-weight:700; font-size:15px; border:none; background:transparent; width:80%;}
@@ -1149,10 +1157,11 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.18';
+const FIRMWARE_VERSION = '6.20';
 const FIRMWARE_CHANGELOG = [
-  'New achievement: Secret Seeker, for finding the game\u2019s 3 hidden Easter Eggs - tapping its info gives real, specific hints for each one, not just flavour text',
-  'Fixed a real bug: finding an Easter Egg never actually checked for newly-earned achievements at all',
+  'New: a reusable spotlight tour system - dims the whole screen except a live cutout around the real element being explained, with a speech-bubble callout',
+  'First-launch tour walks through what each of the 5 main tabs is for, right after onboarding',
+  'Added a "How to Play" button above Game Secrets to replay it any time',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -3626,6 +3635,63 @@ function showLegendaryShooWarning(onProceed, onCancel){
   document.getElementById('legShooProceed').addEventListener('click', ()=>{ overlay.remove(); onProceed(); });
   document.getElementById('legShooBack').addEventListener('click', ()=>{ overlay.remove(); onCancel(); });
 }
+let tourSteps = [], tourStepIndex = 0, tourOnComplete = null;
+function startTour(steps, onComplete){
+  tourSteps = steps;
+  tourStepIndex = 0;
+  tourOnComplete = onComplete || null;
+  showTourStep();
+}
+function endTour(){
+  const existing = document.getElementById('tourOverlay');
+  if(existing) existing.remove();
+  const cb = tourOnComplete;
+  tourSteps = []; tourStepIndex = 0; tourOnComplete = null;
+  if(cb) cb();
+}
+function showTourStep(){
+  const existing = document.getElementById('tourOverlay');
+  if(existing) existing.remove();
+  if(tourStepIndex >= tourSteps.length){ endTour(); return; }
+  const step = tourSteps[tourStepIndex];
+  const target = document.querySelector(step.targetSelector);
+  if(!target){ tourStepIndex++; showTourStep(); return; } // safety net - skip a step if its target isn't on screen right now
+  const rect = target.getBoundingClientRect();
+  const pad = 6;
+  const holeTop = rect.top-pad, holeLeft = rect.left-pad, holeW = rect.width+pad*2, holeH = rect.height+pad*2;
+  const spaceBelow = window.innerHeight - (holeTop+holeH);
+  const bubbleGoesBelow = spaceBelow > holeTop;
+  const bubbleStyle = bubbleGoesBelow
+    ? `top:${holeTop+holeH+14}px;`
+    : `top:${Math.max(10, holeTop-14)}px;transform:translate(-50%,-100%);`;
+  const overlay = document.createElement('div');
+  overlay.id = 'tourOverlay'; overlay.className = 'tour-overlay';
+  overlay.innerHTML = `
+    <div class="tour-hole" style="top:${holeTop}px;left:${holeLeft}px;width:${holeW}px;height:${holeH}px;"></div>
+    <div class="tour-bubble" style="${bubbleStyle}">
+      ${bubbleGoesBelow?`<div class="tour-arrow tour-arrow-up"></div>`:''}
+      <div class="pixel sm">${step.title}</div>
+      <div class="hint" style="margin-top:4px;">${step.text}</div>
+      <div class="buttons-row" style="margin-top:8px;">
+        <button class="btn cream small" id="tourSkipBtn">Skip</button>
+        <button class="btn yolk small" id="tourNextBtn">${tourStepIndex===tourSteps.length-1?'Done':'Next'}</button>
+      </div>
+      ${bubbleGoesBelow?'':'<div class="tour-arrow tour-arrow-down"></div>'}
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('tourNextBtn').addEventListener('click', ()=>{ tourStepIndex++; showTourStep(); });
+  document.getElementById('tourSkipBtn').addEventListener('click', endTour);
+}
+const TAB_TOUR_STEPS = [
+  {targetSelector:'[data-tab="scan"]', title:'Scan', text:"This is where it all starts - scan a real barcode on any product to discover and try to capture a Skrambeast. Every barcode is its own unique monster."},
+  {targetSelector:'[data-tab="collection"]', title:'Squad', text:"Your whole collection lives here. Favourite up to 5 to build your active squad, plus check on Missions, Friends, and your own Profile from the tabs at the top."},
+  {targetSelector:'[data-tab="store"]', title:'Store', text:"Spend coins here on gear, potions, costumes, and more to strengthen your Skrambeasts and customise your scanner."},
+  {targetSelector:'[data-tab="almanac"]', title:'Log', text:"Your journal of every Skrambeast you've ever discovered, plus your stats, Daily Quests, and achievements."},
+  {targetSelector:'[data-tab="versus"]', title:'VS', text:"Battle other players, train solo in the Arena, or take on The Hive for an endless survival challenge."},
+];
+function startTabTour(){
+  startTour(TAB_TOUR_STEPS, ()=>{ state.hasSeenTabTour = true; saveState(); });
+}
 function showConfirm(message, onYes, opts){
   opts = opts || {};
   const overlay = document.createElement('div');
@@ -5131,7 +5197,7 @@ function renderSquadGrid(panel){
   pageItems.forEach(m=>{
     const rs = RARITY_STYLE[m.rarity];
     const tile = document.createElement('div');
-    tile.className = 'tile'+(m.holo?' holo':'')+(isTired(m)?' resting':'')+(!m.favorite?' benched':'')+(monsterOnMission(m)?' on-mission':'');
+    tile.className = 'tile'+(m.holo?' holo':'')+(isTired(m)?' resting':'')+(monsterOnMission(m)?' on-mission':'');
     tile.dataset.rarity = m.rarity;
     tile.style.setProperty('--rarity', rs.color);
     const boostBadgeStr = m.favorite ? ['xp','coin','capture'].map(kind=>{
@@ -6197,6 +6263,7 @@ function renderStatsPanel(container, panel){
         ${row('Toughest Opponent', s.highestFought? s.highestFought.name+' Lv.'+s.highestFought.level : '-', '#a13a24')}
         ${row('One-Hit KOs', s.oneHitKOs||0, '#E8542E')}
         ${row('Secrets Known', secretsKnownCount()+'/'+GAME_SECRETS.length, '#D4A017')}
+        <div class="buttons-row"><button class="btn cream small full" id="logModeHowToPlay">How to Play</button></div>
         <div class="buttons-row"><button class="btn cream small full" id="logModeTips">Game Secrets</button></div>`;
     },
     ()=>{
@@ -6276,6 +6343,8 @@ function renderStatsPanel(container, panel){
   document.getElementById('statsNext').addEventListener('click', ()=>{ if(statsPage>=totalPages-1) return; statsPage=Math.min(totalPages-1,statsPage+1); renderStatsPanel(container,panel); });
   const tipsBtn = document.getElementById('logModeTips');
   if(tipsBtn) tipsBtn.addEventListener('click', ()=>{ logSubView='tips'; renderAlmanac(panel); });
+  const howToPlayBtn = document.getElementById('logModeHowToPlay');
+  if(howToPlayBtn) howToPlayBtn.addEventListener('click', startTabTour);
   const bestDayRow = document.getElementById('bestDayRow');
   if(bestDayRow) bestDayRow.addEventListener('click', ()=>{
     if(markEasterEggStep('egg3','d')){
@@ -8799,6 +8868,7 @@ function showNameAndSetup(){
         document.body.classList.remove('scanner-setup-lock');
         screenEl.innerHTML = '';
         renderTab();
+        if(!state.hasSeenTabTour) setTimeout(startTabTour, 400);
       });
     });
   };
