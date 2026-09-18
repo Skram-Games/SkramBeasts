@@ -1160,9 +1160,14 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.27';
+const FIRMWARE_VERSION = '6.28';
 const FIRMWARE_CHANGELOG = [
-  'Fixed a real bug, very likely the cause of players not appearing on the leaderboard: the one-time authLink/playerClaim publish that Security Rules depend on could silently fail (network blip, timing, anything) and would then NEVER be retried, permanently locking that player out of ever publishing to their own leaderboard entry again. Now tracks genuine success (not just "was attempted") and retries automatically on every app load until it actually lands',
+  'Fixed a real bug: hatching an egg never locked background scroll, unlike other popups',
+  'Fixed a real bug: Queen\u2019s Crowns were tracked and even had their own achievement, but never actually shown anywhere on the Profile page - added a proper row matching the Max Level Trophies style',
+  'Fixed a real bug: scanner skins only ever recoloured the inner bezel/LCD - the outer device housing and page background stayed permanently teal regardless of skin. Every skin and basic shell colour now recolours the whole scanner UI',
+  'Moved the two Free Ad Boost rows (Coin and XP) from inside the Boosts category onto the main Store page, so they\u2019re visible immediately',
+  'Buy Rank re-priced from 15,000 to 100,000 coins',
+  'Added a Seasonal section under Party Hats in Costumes, ready for future claimable Christmas/Easter/Halloween drops - shows a placeholder note for now',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -2826,7 +2831,7 @@ const BOOST_ITEMS = [
   {key:'xp5x', name:'XP x5 Boost', desc:'5x XP for your whole squad - 3 minutes', cost:14000, kind:'xp', mult:5, badge:'×5', durationMs:3*60000},
   {key:'coinDoubler', name:'Coin Doubler', desc:'Doubles coins earned - 5 minutes', cost:5000, kind:'coin', mult:2, badge:'×C', durationMs:5*60000},
   {key:'instantLevelPotion', name:'Instant Level Potion', desc:'Instantly levels up each of your 5 favourites by one level', cost:10000, kind:'instantLevel'},
-  {key:'buyRank', name:'Buy Rank', desc:'Instantly advance to your next Hunter Rank', cost:15000, kind:'buyRank'},
+  {key:'buyRank', name:'Buy Rank', desc:'Instantly advance to your next Hunter Rank', cost:100000, kind:'buyRank'},
   {key:'buyEgg', name:'Mystery Egg', desc:'A guaranteed Rare-or-better egg, same odds as one found scanning - still takes time to hatch', cost:25000, kind:'buyEgg'},
   {key:'onlyMaxHits', name:'Only Max Hits', desc:'Every tap lands your maximum possible hit - 5 minutes', cost:50000, kind:'maxHit', mult:1, badge:'MAX', durationMs:5*60000},
 ];
@@ -3384,11 +3389,11 @@ function stickerTileDataURI(){
   return `url("data:image/svg+xml,${encodeURIComponent(tile)}")`;
 }
 const SHELL_THEMES = [
-  {key:'teal', name:'Teal', bg:'#16323E'},
-  {key:'crimson', name:'Crimson', bg:'#5C1620'},
-  {key:'violet', name:'Violet', bg:'#3A2060'},
-  {key:'forest', name:'Forest', bg:'#1E4A2A'},
-  {key:'charcoal', name:'Charcoal', bg:'#333333'},
+  {key:'teal', name:'Teal', bg:'#16323E', mid:'#3E7C82'},
+  {key:'crimson', name:'Crimson', bg:'#5C1620', mid:'#A8384A'},
+  {key:'violet', name:'Violet', bg:'#3A2060', mid:'#6B3FA0'},
+  {key:'forest', name:'Forest', bg:'#1E4A2A', mid:'#3D7A4C'},
+  {key:'charcoal', name:'Charcoal', bg:'#333333', mid:'#5C5C5C'},
 ];
 const LASER_COLORS = [
   {key:'red', name:'Red', bar:'rgba(230,30,30,.75)', glow:'rgba(230,30,30,.8)'},
@@ -3399,16 +3404,16 @@ const LASER_COLORS = [
   {key:'white', name:'White', bar:'rgba(255,255,255,.85)', glow:'rgba(255,255,255,.9)'},
 ];
 const SCANNER_SKINS = [
-  {key:'sparkly', name:'Sparkly', desc:'A shimmering starfield shell, bright white laser', cost:15000, bezelClass:'skin-sparkly', laserBar:'rgba(255,255,255,.9)', laserGlow:'rgba(255,255,255,.95)', scanFx:'fx-sparkly'},
-  {key:'gold', name:'Gold', desc:'A gleaming gold shell, warm golden laser', cost:15000, bezelClass:'skin-gold', laserBar:'rgba(255,200,50,.85)', laserGlow:'rgba(255,200,50,.9)', scanFx:'fx-gold'},
-  {key:'space', name:'Space', desc:'A deep-space shell, pulsing violet laser', cost:15000, bezelClass:'skin-space', laserBar:'rgba(150,80,255,.85)', laserGlow:'rgba(150,80,255,.9)', scanFx:'fx-space'},
-  {key:'camo', name:'Camo', desc:'A tactical desert shell, amber laser', cost:15000, bezelClass:'skin-camo', laserBar:'rgba(255,140,30,.85)', laserGlow:'rgba(255,140,30,.9)', scanFx:'fx-camo'},
-  {key:'stickers', name:'Stickers', desc:'A shell covered in stickers, rainbow laser', cost:15000, bezelClass:'skin-stickers', laserBar:null, laserGlow:null, scanFx:'fx-stickers'},
-  {key:'gogh', name:'Gogh', desc:'Starry Night swirling shell, swirling blue laser', cost:15000, bezelClass:'skin-gogh', laserBar:'rgba(70,130,220,.9)', laserGlow:'rgba(70,130,220,.9)', scanFx:'fx-gogh'},
-  {key:'clear', name:'Clear', desc:'See-through shell with visible wiring, crossed green lasers', cost:15000, bezelClass:'skin-clear', laserBar:'rgba(80,255,140,.9)', laserGlow:'rgba(80,255,140,.9)', scanFx:'fx-clear'},
-  {key:'matrix', name:'Matrix', desc:'Green-to-black gradient shell, full-screen falling code', cost:15000, bezelClass:'skin-matrix', laserBar:'rgba(80,255,120,.9)', laserGlow:'rgba(80,255,120,.9)', scanFx:'fx-matrix'},
-  {key:'punk', name:'Punk', desc:'A steampunk brass-and-gear shell, yellow and red laser', cost:15000, bezelClass:'skin-punk', laserBar:'rgba(240,190,50,.9)', laserGlow:'rgba(220,60,40,.85)', scanFx:'fx-punk'},
-  {key:'blocks', name:'Blocks', desc:'A blocky world cross-section shell, from sky to lava', cost:15000, bezelClass:'skin-blocks', laserBar:'rgba(255,255,255,.85)', laserGlow:'rgba(255,255,255,.9)', scanFx:'fx-blocks'},
+  {key:'sparkly', name:'Sparkly', desc:'A shimmering starfield shell, bright white laser', cost:15000, bezelClass:'skin-sparkly', laserBar:'rgba(255,255,255,.9)', laserGlow:'rgba(255,255,255,.95)', scanFx:'fx-sparkly', bg:'#1a0f2e', bgMid:'#2a1a3e'},
+  {key:'gold', name:'Gold', desc:'A gleaming gold shell, warm golden laser', cost:15000, bezelClass:'skin-gold', laserBar:'rgba(255,200,50,.85)', laserGlow:'rgba(255,200,50,.9)', scanFx:'fx-gold', bg:'#8B6508', bgMid:'#FFD700'},
+  {key:'space', name:'Space', desc:'A deep-space shell, pulsing violet laser', cost:15000, bezelClass:'skin-space', laserBar:'rgba(150,80,255,.85)', laserGlow:'rgba(150,80,255,.9)', scanFx:'fx-space', bg:'#0d0620', bgMid:'#3a1a5e'},
+  {key:'camo', name:'Camo', desc:'A tactical desert shell, amber laser', cost:15000, bezelClass:'skin-camo', laserBar:'rgba(255,140,30,.85)', laserGlow:'rgba(255,140,30,.9)', scanFx:'fx-camo', bg:'#5c4a2e', bgMid:'#a68b5c'},
+  {key:'stickers', name:'Stickers', desc:'A shell covered in stickers, rainbow laser', cost:15000, bezelClass:'skin-stickers', laserBar:null, laserGlow:null, scanFx:'fx-stickers', bg:'#6b5d47', bgMid:'#e8e2d5'},
+  {key:'gogh', name:'Gogh', desc:'Starry Night swirling shell, swirling blue laser', cost:15000, bezelClass:'skin-gogh', laserBar:'rgba(70,130,220,.9)', laserGlow:'rgba(70,130,220,.9)', scanFx:'fx-gogh', bg:'#1a2f5e', bgMid:'#3a6ea8'},
+  {key:'clear', name:'Clear', desc:'See-through shell with visible wiring, crossed green lasers', cost:15000, bezelClass:'skin-clear', laserBar:'rgba(80,255,140,.9)', laserGlow:'rgba(80,255,140,.9)', scanFx:'fx-clear', bg:'#5c6b66', bgMid:'#b4c8c0'},
+  {key:'matrix', name:'Matrix', desc:'Green-to-black gradient shell, full-screen falling code', cost:15000, bezelClass:'skin-matrix', laserBar:'rgba(80,255,120,.9)', laserGlow:'rgba(80,255,120,.9)', scanFx:'fx-matrix', bg:'#060606', bgMid:'#0a2e12'},
+  {key:'punk', name:'Punk', desc:'A steampunk brass-and-gear shell, yellow and red laser', cost:15000, bezelClass:'skin-punk', laserBar:'rgba(240,190,50,.9)', laserGlow:'rgba(220,60,40,.85)', scanFx:'fx-punk', bg:'#5c3f22', bgMid:'#a67c4a'},
+  {key:'blocks', name:'Blocks', desc:'A blocky world cross-section shell, from sky to lava', cost:15000, bezelClass:'skin-blocks', laserBar:'rgba(255,255,255,.85)', laserGlow:'rgba(255,255,255,.9)', scanFx:'fx-blocks', bg:'#6b4a2e', bgMid:'#4a9e3f'},
 ];
 function shellSwatchesHTML(){
   const basic = SHELL_THEMES.map(s=> `<button class="btn tiny ${state.scannerCustomization.shell===s.key?'yolk':'cream'}" data-shell="${s.key}">${s.name}</button>`).join('');
@@ -3447,12 +3452,16 @@ function applyScannerCustomization(){
   if(skin){
     if(skin.laserBar) document.body.style.setProperty('--laser-bar', skin.laserBar);
     if(skin.laserGlow) document.body.style.setProperty('--laser-glow', skin.laserGlow);
+    if(skin.bg) document.body.style.setProperty('--shell-dark', skin.bg);
+    document.body.style.setProperty('--shell-mid', skin.bgMid || skin.bg || '#16323E');
   } else {
     const shell = SHELL_THEMES.find(s=>s.key===sc.shell) || SHELL_THEMES[0];
     const laser = LASER_COLORS.find(l=>l.key===sc.laser) || LASER_COLORS[0];
     document.body.style.setProperty('--bezel-bg', shell.bg);
     document.body.style.setProperty('--laser-bar', laser.bar);
     document.body.style.setProperty('--laser-glow', laser.glow);
+    document.body.style.setProperty('--shell-dark', shell.bg);
+    document.body.style.setProperty('--shell-mid', shell.mid || shell.bg);
   }
   document.querySelectorAll('.matrix-rain-overlay, .clear-cross-line').forEach(el=> el.remove());
   document.querySelectorAll('.screen').forEach(screenEl=>{
@@ -3961,6 +3970,7 @@ function openEggHatchPopup(index, panel){
     </div>
   </div>`;
   document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
   const tapZone = document.getElementById('eggTapZone');
   const artwork = document.getElementById('eggArtwork');
   const cracksEl = document.getElementById('eggCracksSvg');
@@ -4007,7 +4017,7 @@ function completeEggHatch(index, panel, overlay){
         <div class="pixel sm">${RARITY_STYLE[monster.rarity].label} - Lv.${monster.level}</div>
         <div class="buttons-row"><button class="btn yolk small full" id="eggHatchCloseBtn">Nice!</button></div>
       </div>`;
-      document.getElementById('eggHatchCloseBtn').addEventListener('click', ()=>{ overlay.remove(); renderScannerFirmware(panel); });
+      document.getElementById('eggHatchCloseBtn').addEventListener('click', ()=>{ overlay.remove(); document.body.style.overflow = ''; renderScannerFirmware(panel); });
     }, 350);
   }, 300);
 }
@@ -5790,6 +5800,10 @@ function renderProfile(container, panel){
         return `<span class="cat-badge" style="width:22px;height:22px;background:${color};border-radius:6px;display:inline-flex;">${achievementIcon(key)}</span>`;
       }).join(' ')
     : '<span class="hint">None yet</span>';
+  const crownCount = state.inventory.queensCrown||0;
+  const crownRow = crownCount>0
+    ? Array.from({length: Math.min(crownCount,10)}).map(()=> iconCrown()).join('') + (crownCount>10?` <span class="pixel sm">+${crownCount-10}</span>`:'')
+    : '<span class="hint">None yet</span>';
   container.innerHTML = `
     <div class="section-label">Hunter Profile</div>
     <div class="log-row"><div class="log-info"><div class="log-name">${p.name}</div><div class="log-meta">Wins ${p.totalWins} · Fights ${p.totalFights} · Best streak ${p.bestStreak} · Hive Streak: ${state.stats.hiveBestKillCount||0} · K:D ${kd} · ${achievementsUnlockedCount()}/${ACHIEVEMENT_CATEGORIES.length*5} Achievements</div></div></div>
@@ -5797,6 +5811,7 @@ function renderProfile(container, panel){
     <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
     <div class="log-row" id="highestBeastRow" style="${p.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${p.highest? p.highest.name+' - Lv.'+p.highest.level+' ('+(p.highest.isBoss?'Queen':RARITY_STYLE[p.highest.rarity].label)+')'+(p.highest.level>=MAX_LEVEL_BY_RARITY[p.highest.rarity]?` ${iconTrophy(13,RARITY_STYLE[p.highest.rarity].color)}`:'') : '-'}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Max Level Trophies (${trophyCount})</div><div class="log-meta">${trophyRow}</div></div></div>
+    <div class="log-row"><div class="log-info"><div class="log-name">Queen's Crowns (${crownCount})</div><div class="log-meta">${crownRow}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Recent Achievements</div><div class="log-meta">${achRow}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Secrets Known</div></div><div class="log-status" id="secretsKnownBadge" style="${easterEggStepDone('egg1','a')?'background:#1A1F1C;color:#fff;':'background:#D4A017;'}">${secretsKnownCount()}/${GAME_SECRETS.length}</div></div>`;
   document.getElementById('secretsKnownBadge').addEventListener('click', ()=>{
@@ -6559,8 +6574,9 @@ function renderBag(panel){
 function renderStore(panel){
   if(storeCategory==='bag'){ renderBag(panel); return; }
   if(!storeCategory){
-    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">STORE</div><div style="display:flex; align-items:center; gap:6px;"><button class="btn yolk" style="padding:5px 12px; font-size:13px; border-radius:999px; box-shadow:none; flex:none;" id="bagOpenBtn">${iconBag()} Inventory</button><div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div></div></div><div class="page-bar" id="storeCatPageBar"></div><div id="storeCatList"></div>`;
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">STORE</div><div style="display:flex; align-items:center; gap:6px;"><button class="btn yolk" style="padding:5px 12px; font-size:13px; border-radius:999px; box-shadow:none; flex:none;" id="bagOpenBtn">${iconBag()} Inventory</button><div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div></div></div><div id="storeMainAdRow"></div><div class="page-bar" id="storeCatPageBar"></div><div id="storeCatList"></div>`;
     document.getElementById('bagOpenBtn').addEventListener('click', ()=>{ storeCategory='bag'; bagPage=0; renderStore(panel); });
+    renderFreeAdBoostRows(document.getElementById('storeMainAdRow'), panel);
     const totalPages = Math.max(1, Math.ceil(STORE_CATEGORIES.length/STORE_CAT_PAGE_SIZE));
     storeCatPage = Math.min(storeCatPage, totalPages-1);
     const pageCats = STORE_CATEGORIES.slice(storeCatPage*STORE_CAT_PAGE_SIZE, storeCatPage*STORE_CAT_PAGE_SIZE+STORE_CAT_PAGE_SIZE);
@@ -6681,6 +6697,11 @@ function renderCostumes(container, panel){
     renderCostumes(container, panel);
   });
   container.appendChild(row);
+  const seasonalSection = document.createElement('div'); seasonalSection.className='section-label'; seasonalSection.textContent='Seasonal';
+  container.appendChild(seasonalSection);
+  const seasonalNote = document.createElement('div'); seasonalNote.className='hint'; seasonalNote.style.cssText='text-align:center;padding:6px 0;';
+  seasonalNote.textContent = 'Nothing available right now - check back for seasonal drops.';
+  container.appendChild(seasonalNote);
 }
 function showItemDetailPopupCustom(name, visualHtml, descHtml){
   const overlay = document.createElement('div');
@@ -6760,8 +6781,8 @@ let boostsPage = 0;
 let skinsPage = 0;
 const SKINS_PAGE_SIZE = 5;
 const BOOSTS_PAGE_SIZE = 5;
-function renderBoosts(container, panel){
-  container.innerHTML = `<div id="freeAdBoostRow"></div><div class="page-bar" id="boostsPageBar" style="margin-top:6px;"></div><div id="boostsList" style="margin-top:4px;"></div>`;
+function renderFreeAdBoostRows(container, panel){
+  const holder = document.createElement('div');
   const adCooldownActive = Date.now() < (state.freeAdBoostCooldownUntil||0);
   const coinBoostActive = state.activeBoosts && state.activeBoosts['coin'] && Date.now()<state.activeBoosts['coin'].expiresAt;
   const adBlocked = adCooldownActive || coinBoostActive;
@@ -6777,11 +6798,11 @@ function renderBoosts(container, panel){
         state.freeAdBoostCooldownUntil = Date.now()+30*60000;
         saveState(); sfxCoin();
         showToast("Free Coin Boost activated!");
-        renderBoosts(container, panel);
+        renderStore(panel);
       });
     });
   }
-  document.getElementById('freeAdBoostRow').appendChild(adRow);
+  holder.appendChild(adRow);
   const xpAdCooldownActive = Date.now() < (state.freeAdXpBoostCooldownUntil||0);
   const xpBoostActive = state.activeBoosts && state.activeBoosts['xp'] && Date.now()<state.activeBoosts['xp'].expiresAt;
   const xpAdBlocked = xpAdCooldownActive || xpBoostActive;
@@ -6797,11 +6818,15 @@ function renderBoosts(container, panel){
         state.freeAdXpBoostCooldownUntil = Date.now()+30*60000;
         saveState();
         showToast("Free XP Boost activated!");
-        renderBoosts(container, panel);
+        renderStore(panel);
       });
     });
   }
-  document.getElementById('freeAdBoostRow').appendChild(xpAdRow);
+  holder.appendChild(xpAdRow);
+  container.appendChild(holder);
+}
+function renderBoosts(container, panel){
+  container.innerHTML = `<div class="page-bar" id="boostsPageBar" style="margin-top:6px;"></div><div id="boostsList" style="margin-top:4px;"></div>`;
   const totalPages = Math.max(1, Math.ceil(BOOST_ITEMS.length/BOOSTS_PAGE_SIZE));
   boostsPage = Math.min(boostsPage, totalPages-1);
   if(totalPages>1){
