@@ -1157,13 +1157,13 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.24';
+const FIRMWARE_VERSION = '6.25';
 const FIRMWARE_CHANGELOG = [
+  'Fixed a real bug: starting the tour from a page scrolled down (e.g. tapping How to Play near the bottom of the Log tab) measured the first spotlight against that stale scroll position, so it could open almost entirely off-screen - the page now scrolls back to the top before the tour begins',
   'The tour now walks through VS properly too: Player VS Player, Battle Arena, and Boss Training each get their own stop, and Battle Arena goes one step further to explain Normal Training and The Hive separately',
   'Fixed a real bug: the tour\u2019s bubble arrow always pointed at the centre of the screen instead of the thing it was explaining, because the bubble itself was always centred on the screen rather than on its target - it\u2019s now positioned (and the arrow re-aimed) against the actual target\u2019s position every step',
   'The tour now walks through Scan, Squad, and Log properly rather than skimming over them: Scan gets its own stops for the scan button and the type-a-code field, and Squad and Log each walk through their sub-pages one at a time (Profile, Squad, Friends, Missions, Train / Goals, Journal, Quests, Stats) rather than one bubble for the whole row',
   'Every tab and sub-page the tour explains is now shown genuinely tapped/active while it\u2019s being explained, not just spotlighted from the outside',
-  'Fixed a real bug: the tour\u2019s spotlight hole could drift out of sync with its target if the page underneath was scrolled - background scroll is now locked for the tour\u2019s full duration',
   'The tour overlay now genuinely locks out interaction with the real app underneath - only Next and Skip do anything while it\u2019s active',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
@@ -3643,6 +3643,9 @@ function startTour(steps, onComplete){
   tourSteps = steps;
   tourStepIndex = 0;
   tourOnComplete = onComplete || null;
+  window.scrollTo(0,0); // the page may still be scrolled down from wherever the tour was launched (e.g. the
+  // "How to Play" button sits near the bottom of a long Log page) - without this the first hole gets measured
+  // against that stale scroll position and can land off-screen entirely
   document.body.style.overflow = 'hidden'; // locks background scroll for the tour's duration - the hole can't drift from its live target if the page underneath can't scroll at all
   showTourStep();
 }
