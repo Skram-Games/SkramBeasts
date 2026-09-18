@@ -273,10 +273,10 @@
 
   /* Detail modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(10,14,12,.65); display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;}
-  .tour-overlay{position:fixed; inset:0; z-index:9999;}
+  .tour-overlay{position:fixed; inset:0; z-index:9999; pointer-events:auto; touch-action:none;}
   .tour-hole{position:fixed; border-radius:14px; box-shadow:0 0 0 9999px rgba(10,14,12,.82); pointer-events:none; transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease;}
-  .tour-bubble{position:fixed; max-width:250px; background:#fff; border:2.5px solid #1A1F1C; border-radius:14px; padding:12px; box-shadow:0 4px 10px rgba(0,0,0,.35); z-index:10000; left:50%; transform:translateX(-50%);}
-  .tour-arrow{position:absolute; left:50%; transform:translateX(-50%); width:0; height:0;}
+  .tour-bubble{position:fixed; max-width:250px; background:#fff; border:2.5px solid #1A1F1C; border-radius:14px; padding:12px; box-shadow:0 4px 10px rgba(0,0,0,.35); z-index:10000; opacity:0; transition:opacity .12s ease;}
+  .tour-arrow{position:absolute; width:0; height:0;}
   .tour-arrow-up{top:-9px; border-left:9px solid transparent; border-right:9px solid transparent; border-bottom:9px solid #fff;}
   .tour-arrow-up::after{content:''; position:absolute; top:1px; left:-11px; width:0; height:0; border-left:11px solid transparent; border-right:11px solid transparent; border-bottom:11px solid #1A1F1C; z-index:-1;}
   .tour-arrow-down{bottom:-9px; border-left:9px solid transparent; border-right:9px solid transparent; border-top:9px solid #fff;}
@@ -1157,9 +1157,14 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.21';
+const FIRMWARE_VERSION = '6.24';
 const FIRMWARE_CHANGELOG = [
-  'Firebase Web API Key added - Stage 1/2 anonymous auth and authenticated writes are now live for every client. Security Rules still need to be published separately in the Firebase console before this has any real effect',
+  'The tour now walks through VS properly too: Player VS Player, Battle Arena, and Boss Training each get their own stop, and Battle Arena goes one step further to explain Normal Training and The Hive separately',
+  'Fixed a real bug: the tour\u2019s bubble arrow always pointed at the centre of the screen instead of the thing it was explaining, because the bubble itself was always centred on the screen rather than on its target - it\u2019s now positioned (and the arrow re-aimed) against the actual target\u2019s position every step',
+  'The tour now walks through Scan, Squad, and Log properly rather than skimming over them: Scan gets its own stops for the scan button and the type-a-code field, and Squad and Log each walk through their sub-pages one at a time (Profile, Squad, Friends, Missions, Train / Goals, Journal, Quests, Stats) rather than one bubble for the whole row',
+  'Every tab and sub-page the tour explains is now shown genuinely tapped/active while it\u2019s being explained, not just spotlighted from the outside',
+  'Fixed a real bug: the tour\u2019s spotlight hole could drift out of sync with its target if the page underneath was scrolled - background scroll is now locked for the tour\u2019s full duration',
+  'The tour overlay now genuinely locks out interaction with the real app underneath - only Next and Skip do anything while it\u2019s active',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -3638,11 +3643,13 @@ function startTour(steps, onComplete){
   tourSteps = steps;
   tourStepIndex = 0;
   tourOnComplete = onComplete || null;
+  document.body.style.overflow = 'hidden'; // locks background scroll for the tour's duration - the hole can't drift from its live target if the page underneath can't scroll at all
   showTourStep();
 }
 function endTour(){
   const existing = document.getElementById('tourOverlay');
   if(existing) existing.remove();
+  document.body.style.overflow = '';
   const cb = tourOnComplete;
   tourSteps = []; tourStepIndex = 0; tourOnComplete = null;
   if(cb) cb();
@@ -3652,43 +3659,113 @@ function showTourStep(){
   if(existing) existing.remove();
   if(tourStepIndex >= tourSteps.length){ endTour(); return; }
   const step = tourSteps[tourStepIndex];
-  const target = document.querySelector(step.targetSelector);
-  if(!target){ tourStepIndex++; showTourStep(); return; } // safety net - skip a step if its target isn't on screen right now
-  const rect = target.getBoundingClientRect();
-  const pad = 6;
-  const holeTop = rect.top-pad, holeLeft = rect.left-pad, holeW = rect.width+pad*2, holeH = rect.height+pad*2;
-  const spaceBelow = window.innerHeight - (holeTop+holeH);
-  const bubbleGoesBelow = spaceBelow > holeTop;
-  const bubbleStyle = bubbleGoesBelow
-    ? `top:${holeTop+holeH+14}px;`
-    : `top:${Math.max(10, holeTop-14)}px;transform:translate(-50%,-100%);`;
-  const overlay = document.createElement('div');
-  overlay.id = 'tourOverlay'; overlay.className = 'tour-overlay';
-  overlay.innerHTML = `
-    <div class="tour-hole" style="top:${holeTop}px;left:${holeLeft}px;width:${holeW}px;height:${holeH}px;"></div>
-    <div class="tour-bubble" style="${bubbleStyle}">
-      ${bubbleGoesBelow?`<div class="tour-arrow tour-arrow-up"></div>`:''}
-      <div class="pixel sm">${step.title}</div>
-      <div class="hint" style="margin-top:4px;">${step.text}</div>
-      <div class="buttons-row" style="margin-top:8px;">
-        <button class="btn cream small" id="tourSkipBtn">Skip</button>
-        <button class="btn yolk small" id="tourNextBtn">${tourStepIndex===tourSteps.length-1?'Done':'Next'}</button>
-      </div>
-      ${bubbleGoesBelow?'':'<div class="tour-arrow tour-arrow-down"></div>'}
-    </div>`;
-  document.body.appendChild(overlay);
-  document.getElementById('tourNextBtn').addEventListener('click', ()=>{ tourStepIndex++; showTourStep(); });
-  document.getElementById('tourSkipBtn').addEventListener('click', endTour);
+  const render = ()=>{
+    document.body.style.overflow = 'hidden'; // re-assert every step - switchTab (called by onEnter) resets this as part of its own cleanup
+    // a step can spotlight one element or several at once (step.targets) - the hole becomes the union
+    // of all of their boxes, so e.g. a whole row of buttons can be highlighted together when that reads better
+    const selectors = step.targets || [step.targetSelector];
+    const targetEls = selectors.map(sel=>document.querySelector(sel)).filter(Boolean);
+    if(!targetEls.length){ tourStepIndex++; showTourStep(); return; } // safety net - skip a step if its target isn't on screen right now
+    const rects = targetEls.map(el=>el.getBoundingClientRect());
+    const pad = 6;
+    const holeTop = Math.min(...rects.map(r=>r.top)) - pad;
+    const holeLeft = Math.min(...rects.map(r=>r.left)) - pad;
+    const holeRight = Math.max(...rects.map(r=>r.right)) + pad;
+    const holeBottom = Math.max(...rects.map(r=>r.bottom)) + pad;
+    const holeW = holeRight-holeLeft, holeH = holeBottom-holeTop;
+    const holeCenterX = holeLeft + holeW/2;
+    const spaceBelow = window.innerHeight - holeBottom;
+    const bubbleGoesBelow = spaceBelow > holeTop;
+    const overlay = document.createElement('div');
+    overlay.id = 'tourOverlay'; overlay.className = 'tour-overlay';
+    overlay.innerHTML = `
+      <div class="tour-hole" style="top:${holeTop}px;left:${holeLeft}px;width:${holeW}px;height:${holeH}px;"></div>
+      <div class="tour-bubble" id="tourBubble">
+        ${bubbleGoesBelow?`<div class="tour-arrow tour-arrow-up" id="tourArrow"></div>`:''}
+        <div class="pixel sm">${step.title}</div>
+        <div class="hint" style="margin-top:4px;">${step.text}</div>
+        <div class="buttons-row" style="margin-top:8px;">
+          <button class="btn cream small" id="tourSkipBtn">Skip</button>
+          <button class="btn yolk small" id="tourNextBtn">${tourStepIndex===tourSteps.length-1?'Done':'Next'}</button>
+        </div>
+        ${bubbleGoesBelow?'':'<div class="tour-arrow tour-arrow-down" id="tourArrow"></div>'}
+      </div>`;
+    document.body.appendChild(overlay);
+    // Horizontal placement is computed against the target's own centre, not the viewport's - this is
+    // what actually makes the little arrow point at the thing being explained instead of always sitting
+    // dead-centre on screen. Vertical placement stays anchored to the hole's top/bottom edge as before.
+    const bubble = document.getElementById('tourBubble');
+    const margin = 10;
+    const bw = bubble.offsetWidth;
+    let bubbleLeft = holeCenterX - bw/2;
+    bubbleLeft = Math.max(margin, Math.min(bubbleLeft, window.innerWidth - bw - margin));
+    bubble.style.left = bubbleLeft+'px';
+    if(bubbleGoesBelow){
+      bubble.style.top = (holeBottom+14)+'px';
+    } else {
+      bubble.style.top = Math.max(10, holeTop-14)+'px';
+      bubble.style.transform = 'translateY(-100%)';
+    }
+    const arrow = document.getElementById('tourArrow');
+    if(arrow){
+      let arrowLeft = holeCenterX - bubbleLeft;
+      arrowLeft = Math.max(16, Math.min(arrowLeft, bw-16));
+      arrow.style.left = arrowLeft+'px';
+    }
+    bubble.style.opacity = '1';
+    document.getElementById('tourNextBtn').addEventListener('click', ()=>{ tourStepIndex++; showTourStep(); });
+    document.getElementById('tourSkipBtn').addEventListener('click', endTour);
+  };
+  if(step.onEnter){
+    step.onEnter(); // e.g. navigates to a different tab, or switches a sub-view, before this step is shown - lets the tour genuinely walk through the real app and show things in their real tapped state
+    setTimeout(render, 60); // lets that navigation's own render pass settle before measuring the freshly-shown target
+  } else {
+    render();
+  }
+}
+// switchTab has its own 180ms rate limit against rapid manual tab-bar tapping (a known trigger for a
+// GPU-compositor glitch elsewhere in the game). That's the wrong thing to apply to the tour's own
+// programmatic navigation between steps, which can easily land inside that same window - so this
+// clears the limiter's timestamp immediately before navigating, every time the tour itself changes tabs.
+function tourSwitchTab(name){
+  _rapidActionTimestamps['tabSwitch'] = 0;
+  switchTab(name);
 }
 const TAB_TOUR_STEPS = [
-  {targetSelector:'[data-tab="scan"]', title:'Scan', text:"This is where it all starts - scan a real barcode on any product to discover and try to capture a Skrambeast. Every barcode is its own unique monster."},
-  {targetSelector:'[data-tab="collection"]', title:'Squad', text:"Your whole collection lives here. Favourite up to 5 to build your active squad, plus check on Missions, Friends, and your own Profile from the tabs at the top."},
-  {targetSelector:'[data-tab="store"]', title:'Store', text:"Spend coins here on gear, potions, costumes, and more to strengthen your Skrambeasts and customise your scanner."},
-  {targetSelector:'[data-tab="almanac"]', title:'Log', text:"Your journal of every Skrambeast you've ever discovered, plus your stats, Daily Quests, and achievements."},
-  {targetSelector:'[data-tab="versus"]', title:'VS', text:"Battle other players, train solo in the Arena, or take on The Hive for an endless survival challenge."},
+  // Scan gets three stops of its own rather than one: the screen itself, then the two actual ways to
+  // start a scan (camera button, manual entry), each spotlighted on its own before moving on.
+  {targetSelector:'#screen', title:'Scan', text:"This is where it all starts - scan a real barcode on any product to discover and try to capture a Skrambeast. Every barcode is its own unique monster."},
+  {targetSelector:'#scanBtn', title:'Scan button', text:"Tap this to open your camera and scan a real barcode."},
+  {targetSelector:'#manualRow', title:'Type a code', text:"No camera handy, or already know the number? Type a barcode in here and tap Scan instead."},
+  // Squad tab itself is shown in its real tapped (active/yellow) state for its own explanation, the
+  // same way Store, Log and VS already were - navigating in via onEnter rather than only pointing at it.
+  {targetSelector:'[data-tab="collection"]', title:'Squad', text:"Your Squad tab - your full collection lives here, along with a few other pages.", onEnter:()=>{ squadSubView='squad'; tourSwitchTab('collection'); }},
+  {targetSelector:'#squadModeProfile', title:'Profile', text:"Your Hunter progress - level, badges, and overall stats.", onEnter:()=>{ squadSubView='profile'; renderSquadTab(document.getElementById('panel')); }},
+  {targetSelector:'#squadModeSquad', title:'Squad', text:"Your full collection of every Skrambeast you've captured.", onEnter:()=>{ squadSubView='squad'; renderSquadTab(document.getElementById('panel')); }},
+  {targetSelector:'#squadModeFriends', title:'Friends', text:"Manage your friend list and any incoming friend requests.", onEnter:()=>{ squadSubView='friends'; renderSquadTab(document.getElementById('panel')); }},
+  {targetSelector:'#squadModeMissions', title:'Missions', text:"Sends benched Skrambeasts out on timed jobs for rewards.", onEnter:()=>{ squadSubView='missions'; missionSubView='log'; renderSquadTab(document.getElementById('panel')); }},
+  {targetSelector:'#squadModeTrain', title:'Train', text:"Jumps straight into Arena practice against a generated opponent."},
+  {targetSelector:'[data-tab="store"]', title:'Store', text:"Gear, potions, costumes, and more to strengthen your Skrambeasts and customise your scanner.", onEnter:()=>{ tourSwitchTab('store'); }},
+  // Log gets the same treatment as Squad: the tab itself, shown active, then each of its four sub-pages in turn.
+  {targetSelector:'[data-tab="almanac"]', title:'Log', text:"Your Log tab - your journal of every Skrambeast you've ever discovered, plus stats, quests, and achievements.", onEnter:()=>{ logSubView='achievements'; tourSwitchTab('almanac'); }},
+  {targetSelector:'#logModeAch', title:'Goals', text:"Your achievements - permanent goals to chase as you keep playing.", onEnter:()=>{ logSubView='achievements'; renderAlmanac(document.getElementById('panel')); }},
+  {targetSelector:'#logModeEnc', title:'Journal', text:"Every Skrambeast you've ever discovered, all in one place.", onEnter:()=>{ logSubView='encyclopedia'; renderAlmanac(document.getElementById('panel')); }},
+  {targetSelector:'#logModeQuests', title:'Quests', text:"Your Daily Quests - fresh objectives that reset each day.", onEnter:()=>{ logSubView='quests'; renderAlmanac(document.getElementById('panel')); }},
+  {targetSelector:'#logModeStats', title:'Stats', text:"Your full battle record - wins, losses, streaks, and more.", onEnter:()=>{ logSubView='stats'; renderAlmanac(document.getElementById('panel')); }},
+  // VS gets the same walk-through: the tab itself, then each battling option in turn, including diving
+  // one level into Battle Arena's own two sub-choices (Normal Training vs The Hive) before backing out
+  // to Boss Training. None of these steps actually enter a live fight screen (arena/boss/hive category) -
+  // just the menu screens that explain what each mode is, so nothing with a running timer gets left behind if skipped.
+  {targetSelector:'[data-tab="versus"]', title:'VS', text:"Your VS tab - every kind of battle lives here, from fighting other players to an endless survival run.", onEnter:()=>{ versusCategory='menu'; tourSwitchTab('versus'); }},
+  {targetSelector:'#vcNearby', title:'Player VS Player', text:"Trade or duel another hunter directly, by sharing a code or finding one nearby instantly."},
+  {targetSelector:'#vcArena', title:'Battle Arena', text:"Leads to two kinds of solo training - a single practice fight, or an endless survival run in The Hive."},
+  {targetSelector:'#vcNormalTraining', title:'Normal Training', text:"A single practice fight against a generated opponent - good for testing a new lineup.", onEnter:()=>{ versusCategory='arenaChoice'; renderVersus(document.getElementById('panel')); }},
+  {targetSelector:'#vcHive', title:'The Hive', text:"One Skrambeast, no healing, endless waves - see how far you can get before you fall."},
+  {targetSelector:'#vcBoss', title:'Boss Training', text:"Safely practice against a Queen you've already discovered and defeated once for real.", onEnter:()=>{ versusCategory='menu'; renderVersus(document.getElementById('panel')); }},
 ];
 function startTabTour(){
-  startTour(TAB_TOUR_STEPS, ()=>{ state.hasSeenTabTour = true; saveState(); });
+  tourSwitchTab('scan');
+  startTour(TAB_TOUR_STEPS, ()=>{ state.hasSeenTabTour = true; saveState(); tourSwitchTab('scan'); });
 }
 function showConfirm(message, onYes, opts){
   opts = opts || {};
@@ -4927,7 +5004,7 @@ let missionSubView = 'log', missionSelectedTier = null, missionSendingSlotIndex 
 function renderSquadTab(panel){
   const missionsReadyCount = (state.missions||[]).filter(s=>s && missionReady(s)).length;
   panel.innerHTML = `
-    <div class="buttons-row" style="margin-top:0;">
+    <div class="buttons-row" style="margin-top:0;" id="squadSubTabRow">
       <button class="btn ${squadSubView==='profile'?'yolk':'cream'} small" id="squadModeProfile">PROFILE</button>
       <button class="btn ${squadSubView==='squad'?'yolk':'cream'} small" id="squadModeSquad">SQUAD</button>
       <button class="btn ${squadSubView==='friends'?'yolk':'cream'} small" id="squadModeFriends" style="position:relative;">FRIENDS${friendRequestBadgeCount>0?`<span class="tab-badge" style="display:flex;">${Math.min(9,friendRequestBadgeCount)}</span>`:''}</button>
