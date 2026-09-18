@@ -274,7 +274,7 @@
   /* Detail modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(10,14,12,.65); display:flex; align-items:center; justify-content:center; z-index:100; padding:16px;}
   .tour-overlay{position:fixed; inset:0; z-index:9999; pointer-events:auto; touch-action:none;}
-  .tour-hole{position:fixed; border-radius:14px; box-shadow:0 0 0 9999px rgba(10,14,12,.82); pointer-events:none; transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease;}
+  .tour-hole{position:fixed; border-radius:14px; box-shadow:0 0 0 9999px rgba(10,14,12,.6); pointer-events:none; transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease;}
   .tour-bubble{position:fixed; max-width:250px; background:#fff; border:2.5px solid #1A1F1C; border-radius:14px; padding:12px; box-shadow:0 4px 10px rgba(0,0,0,.35); z-index:10000; opacity:0; transition:opacity .12s ease;}
   .tour-arrow{position:absolute; width:0; height:0;}
   .tour-arrow-up{top:-9px; border-left:9px solid transparent; border-right:9px solid transparent; border-bottom:9px solid #fff;}
@@ -783,7 +783,31 @@ const FIREBASE_WEB_API_KEY = 'AIzaSyAeHcpNbe9b_GYNVjdpxP_PoNZRhIN9qxE';
 // use this link to enforce real per-player write ownership in Security Rules.
 async function ensureAuthIdentity(){
   if(!HAS_FIREBASE || FIREBASE_WEB_API_KEY==='YOUR_WEB_API_KEY_HERE') return null;
-  if(state.authUid && state.authIdToken && Date.now()<(state.authTokenExpiresAt||0)){ return state.authUid; }
+  // Publishes/retries the authLink + playerClaim records for the current identity - safe to call
+  // repeatedly, since the Security Rules themselves guard against overwriting an already-successful
+  // record via !data.exists(). Only marks state.authLinkPublished once the writes genuinely succeed
+  // (both responses .ok), not merely attempted - a prior version assumed success from "was this a
+  // fresh sign-up", so a single failed write (network blip, timing, anything) permanently locked that
+  // player out of ever publishing to their own leaderboard entry again, with no retry ever happening.
+  async function publishIdentityLinks(uid, token){
+    const myPlayerId = ensurePlayerId();
+    const authParam = token ? `?auth=${token}` : '';
+    try{
+      const r1 = await fetch(`${FIREBASE_DB_URL}/shared/authLink:${uid}.json${authParam}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({playerId: myPlayerId, linkedAt: Date.now()})
+      });
+      const r2 = await fetch(`${FIREBASE_DB_URL}/shared/playerClaim:${firebaseSafeKey(myPlayerId)}.json${authParam}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({uid, claimedAt: Date.now()})
+      });
+      if(r1.ok && r2.ok){ state.authLinkPublished = true; saveState(); }
+    }catch(e){ /* will retry on the next call to ensureAuthIdentity */ }
+  }
+  if(state.authUid && state.authIdToken && Date.now()<(state.authTokenExpiresAt||0)){
+    if(!state.authLinkPublished) publishIdentityLinks(state.authUid, state.authIdToken); // don't block this call on it - fire and let it retry in the background
+    return state.authUid;
+  }
   try{
     if(state.authUid && state.authRefreshToken){
       const refreshRes = await fetch(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE_WEB_API_KEY}`, {
@@ -796,6 +820,7 @@ async function ensureAuthIdentity(){
         state.authRefreshToken = data.refresh_token;
         state.authTokenExpiresAt = Date.now() + (Number(data.expires_in)||3600)*1000 - 60000; // refresh a minute early
         saveState();
+        if(!state.authLinkPublished) await publishIdentityLinks(state.authUid, state.authIdToken);
         return state.authUid;
       }
       // refresh failed (e.g. revoked) - fall through to a fresh anonymous sign-in below
@@ -805,34 +830,12 @@ async function ensureAuthIdentity(){
     });
     if(!res.ok) return null;
     const data = await res.json();
-    const isNewIdentity = !state.authUid;
     state.authUid = data.localId;
     state.authIdToken = data.idToken;
     state.authRefreshToken = data.refreshToken;
     state.authTokenExpiresAt = Date.now() + (Number(data.expiresIn)||3600)*1000 - 60000;
     saveState();
-    if(isNewIdentity){
-      // Best-effort for now - Stage 2's rules make both of these first-claim-only so neither can be
-      // overwritten later. authLink (uid->playerId) lets a rule check "what playerId do I own" from
-      // my own auth.uid directly. playerClaim (playerId->uid) is the reverse lookup, needed so a rule
-      // can check "has this playerId already been claimed by a DIFFERENT uid" before allowing a new
-      // authLink to be created - without it, someone could link their own uid to someone else's
-      // existing playerId and hijack their profile.
-      const myPlayerId = ensurePlayerId();
-      const authParam = state.authIdToken ? `?auth=${state.authIdToken}` : '';
-      try{
-        await fetch(`${FIREBASE_DB_URL}/shared/authLink:${data.localId}.json${authParam}`, {
-          method:'PUT', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({playerId: myPlayerId, linkedAt: Date.now()})
-        });
-      }catch(e){}
-      try{
-        await fetch(`${FIREBASE_DB_URL}/shared/playerClaim:${firebaseSafeKey(myPlayerId)}.json${authParam}`, {
-          method:'PUT', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({uid: data.localId, claimedAt: Date.now()})
-        });
-      }catch(e){}
-    }
+    await publishIdentityLinks(data.localId, data.idToken);
     return state.authUid;
   }catch(e){ return null; }
 }
@@ -1157,14 +1160,9 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.25';
+const FIRMWARE_VERSION = '6.27';
 const FIRMWARE_CHANGELOG = [
-  'Fixed a real bug: starting the tour from a page scrolled down (e.g. tapping How to Play near the bottom of the Log tab) measured the first spotlight against that stale scroll position, so it could open almost entirely off-screen - the page now scrolls back to the top before the tour begins',
-  'The tour now walks through VS properly too: Player VS Player, Battle Arena, and Boss Training each get their own stop, and Battle Arena goes one step further to explain Normal Training and The Hive separately',
-  'Fixed a real bug: the tour\u2019s bubble arrow always pointed at the centre of the screen instead of the thing it was explaining, because the bubble itself was always centred on the screen rather than on its target - it\u2019s now positioned (and the arrow re-aimed) against the actual target\u2019s position every step',
-  'The tour now walks through Scan, Squad, and Log properly rather than skimming over them: Scan gets its own stops for the scan button and the type-a-code field, and Squad and Log each walk through their sub-pages one at a time (Profile, Squad, Friends, Missions, Train / Goals, Journal, Quests, Stats) rather than one bubble for the whole row',
-  'Every tab and sub-page the tour explains is now shown genuinely tapped/active while it\u2019s being explained, not just spotlighted from the outside',
-  'The tour overlay now genuinely locks out interaction with the real app underneath - only Next and Skip do anything while it\u2019s active',
+  'Fixed a real bug, very likely the cause of players not appearing on the leaderboard: the one-time authLink/playerClaim publish that Security Rules depend on could silently fail (network blip, timing, anything) and would then NEVER be retried, permanently locking that player out of ever publishing to their own leaderboard entry again. Now tracks genuine success (not just "was attempted") and retries automatically on every app load until it actually lands',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -3660,7 +3658,7 @@ function endTour(){
 function showTourStep(){
   const existing = document.getElementById('tourOverlay');
   if(existing) existing.remove();
-  if(tourStepIndex >= tourSteps.length){ endTour(); return; }
+  if(tourStepIndex >= tourSteps.length){ showTourFinale(); return; }
   const step = tourSteps[tourStepIndex];
   const render = ()=>{
     document.body.style.overflow = 'hidden'; // re-assert every step - switchTab (called by onEnter) resets this as part of its own cleanup
@@ -3725,6 +3723,26 @@ function showTourStep(){
   } else {
     render();
   }
+}
+// The tour's actual send-off, shown once every real step is done - a plain centred message rather than
+// a spotlighted step, since there's nothing left to point at. Reuses the same dimmed backdrop (a
+// zero-size hole still produces a full-screen dim via the box-shadow trick) so it reads as part of the
+// same overlay rather than a jarring new modal. Only ends the tour (and runs its onComplete, which sends
+// the player back to the Scan tab) once the player actually taps through it.
+function showTourFinale(){
+  const overlay = document.createElement('div');
+  overlay.id = 'tourOverlay'; overlay.className = 'tour-overlay';
+  const name = escapeHtml(state.hunterName || 'Hunter');
+  overlay.innerHTML = `
+    <div class="tour-hole" style="top:0px;left:0px;width:0px;height:0px;"></div>
+    <div class="tour-bubble" id="tourBubble" style="left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;opacity:1;">
+      <div class="pixel md">Good luck, ${name}!</div>
+      <div class="buttons-row" style="margin-top:10px;justify-content:center;">
+        <button class="btn yolk small" id="tourFinaleBtn">Let's Begin</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('tourFinaleBtn').addEventListener('click', endTour);
 }
 // switchTab has its own 180ms rate limit against rapid manual tab-bar tapping (a known trigger for a
 // GPU-compositor glitch elsewhere in the game). That's the wrong thing to apply to the tour's own
