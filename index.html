@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4351108264066604"
+     crossorigin="anonymous"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -1160,14 +1162,11 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.28';
+const FIRMWARE_VERSION = '6.29';
 const FIRMWARE_CHANGELOG = [
-  'Fixed a real bug: hatching an egg never locked background scroll, unlike other popups',
-  'Fixed a real bug: Queen\u2019s Crowns were tracked and even had their own achievement, but never actually shown anywhere on the Profile page - added a proper row matching the Max Level Trophies style',
-  'Fixed a real bug: scanner skins only ever recoloured the inner bezel/LCD - the outer device housing and page background stayed permanently teal regardless of skin. Every skin and basic shell colour now recolours the whole scanner UI',
-  'Moved the two Free Ad Boost rows (Coin and XP) from inside the Boosts category onto the main Store page, so they\u2019re visible immediately',
-  'Buy Rank re-priced from 15,000 to 100,000 coins',
-  'Added a Seasonal section under Party Hats in Costumes, ready for future claimable Christmas/Easter/Halloween drops - shows a placeholder note for now',
+  'Fixed a real bug: closing Customize Scanner (from Settings) while on any tab other than Scan left the scanner bezel stuck visible, merged behind whatever tab you returned to. The bezel now correctly hides again when it should',
+  'Fixed a real bug: Boss Training\u2019s persistent Back button had no guard against leaving mid-fight, letting the fight (and the opponent\u2019s attacks) keep running invisibly in the background - now blocked exactly like other active-fight contexts, with the same message',
+  'Fixed a related gap found while investigating the above: the shared fight-lock guard hardcoded Scan as the one always-safe tab to escape to, which was backwards for Boss Training specifically (which happens on the VS tab, not Scan) - a player could still escape via the bottom tab bar\u2019s Scan button alone. Now correctly blocks leaving to any other tab, for either fight context',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -3582,6 +3581,7 @@ function showScannerCustomizeModal(settingsOverlay){
     document.getElementById('scannerCustomizeDone').addEventListener('click', ()=>{
       clearInterval(arenaTickTimer); clearInterval(vsBoostTickTimer); clearInterval(arenaSkipTickTimer); clearInterval(boostsTickTimer); clearInterval(squadTickTimer);
       currentTab = wasTab; versusCategory = wasVersusCategory;
+      document.querySelector('.bezel').style.display = (wasTab==='scan') ? 'block' : 'none';
       renderTab();
     });
   };
@@ -4984,7 +4984,7 @@ function rateLimit(key, minGapMs){
 function switchTab(name){
   if(scannerSetupActive) return; // dummy screen during Scanner Setup - genuinely inert, not just visually blank
   if(rateLimit('tabSwitch', 180)) return; // rapid successive switches are the known trigger for the GPU-compositor tile glitch
-  if(bossBattleLocked && name!=='scan'){ showToast("You can't leave until the fight is over!"); return; }
+  if(bossBattleLocked && name!==currentTab){ showToast("You can't leave until the fight is over!"); return; }
   if(wildBattleLocked && name!=='scan'){ showToast("Finish the fight before switching tabs!"); return; }
   if(nearbyDuelInProgress && name!=='versus'){ showToast("Finish the fight before switching tabs!"); return; }
   if(hiveRunActive && name!=='versus'){ showToast("Finish or exit your Hive run before switching tabs!"); return; }
@@ -7849,7 +7849,10 @@ function renderVersus(panel){
   }
   if(versusCategory==='boss'){
     panel.innerHTML = `<div class="top-bar"><div class="pixel sm">BOSS TRAINING</div>${backRow}</div><div id="bossBoostTimers" style="text-align:right;"></div><div id="bossHost"></div>`;
-    document.getElementById('vcBack').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(panel); });
+    document.getElementById('vcBack').addEventListener('click', ()=>{
+      if(bossBattleLocked){ showToast("You can't leave until the fight is over!"); return; }
+      versusCategory='menu'; renderVersus(panel);
+    });
     renderBossTraining(document.getElementById('bossHost'));
     return;
   }
