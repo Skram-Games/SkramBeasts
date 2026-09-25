@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4351108264066604"
-     crossorigin="anonymous"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -54,7 +52,13 @@
   .brand .tagline{font-family:'Press Start 2P',monospace; font-size:9.5px; color:var(--cream); opacity:.8; margin-top:8px; letter-spacing:.5px; line-height:1.6;}
 
   .bezel{background:var(--bezel-bg, #0d2027); border-radius:18px; padding:10px; box-shadow:inset 0 4px 12px rgba(0,0,0,.5); position:relative;}
-  .screen{background:var(--lcd-bg); border-radius:10px; min-height:190px; max-height:190px; padding:12px; position:relative; overflow:hidden; box-shadow:inset 0 0 0 2px #8f9a72, inset 0 6px 18px rgba(0,0,0,.25); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:6px;}
+  .screen{background:var(--lcd-bg); border-radius:10px; min-height:190px; max-height:190px; padding:12px; position:relative; overflow-y:auto; overflow-x:hidden; box-shadow:inset 0 0 0 2px #8f9a72, inset 0 6px 18px rgba(0,0,0,.25); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:6px;}
+  /* Compact layout used when a freshly-revealed monster's info (name, type/rarity/level, stats, barcode)
+     is packed into the little screen - tighter gaps and smaller text so it fits without squashing or
+     spilling past the edge; overflow-y:auto above is just a safety net for unusually long names. */
+  .screen.encounter-compact{ gap:2px; padding:8px 12px; justify-content:flex-start; }
+  .screen.encounter-compact .mini-svg{ margin:2px 0; }
+  .screen.encounter-compact .stat-row{ font-size:11.5px; gap:6px; }
   .screen::before{content:""; position:absolute; inset:0; background:repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0px, rgba(0,0,0,.05) 1px, transparent 1px, transparent 3px); pointer-events:none;}
   #noiseCanvas{position:absolute; inset:0; width:100%; height:100%; opacity:.4; image-rendering:pixelated;}
   .scan-line{position:absolute; left:0; right:0; height:2.5px; background:var(--laser-bar, rgba(230,30,30,.75)); box-shadow:0 0 10px var(--laser-glow, rgba(230,30,30,.8)); animation:scanmove 2.4s linear infinite; z-index:1;}
@@ -785,31 +789,7 @@ const FIREBASE_WEB_API_KEY = 'AIzaSyAeHcpNbe9b_GYNVjdpxP_PoNZRhIN9qxE';
 // use this link to enforce real per-player write ownership in Security Rules.
 async function ensureAuthIdentity(){
   if(!HAS_FIREBASE || FIREBASE_WEB_API_KEY==='YOUR_WEB_API_KEY_HERE') return null;
-  // Publishes/retries the authLink + playerClaim records for the current identity - safe to call
-  // repeatedly, since the Security Rules themselves guard against overwriting an already-successful
-  // record via !data.exists(). Only marks state.authLinkPublished once the writes genuinely succeed
-  // (both responses .ok), not merely attempted - a prior version assumed success from "was this a
-  // fresh sign-up", so a single failed write (network blip, timing, anything) permanently locked that
-  // player out of ever publishing to their own leaderboard entry again, with no retry ever happening.
-  async function publishIdentityLinks(uid, token){
-    const myPlayerId = ensurePlayerId();
-    const authParam = token ? `?auth=${token}` : '';
-    try{
-      const r1 = await fetch(`${FIREBASE_DB_URL}/shared/authLink:${uid}.json${authParam}`, {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({playerId: myPlayerId, linkedAt: Date.now()})
-      });
-      const r2 = await fetch(`${FIREBASE_DB_URL}/shared/playerClaim:${firebaseSafeKey(myPlayerId)}.json${authParam}`, {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({uid, claimedAt: Date.now()})
-      });
-      if(r1.ok && r2.ok){ state.authLinkPublished = true; saveState(); }
-    }catch(e){ /* will retry on the next call to ensureAuthIdentity */ }
-  }
-  if(state.authUid && state.authIdToken && Date.now()<(state.authTokenExpiresAt||0)){
-    if(!state.authLinkPublished) publishIdentityLinks(state.authUid, state.authIdToken); // don't block this call on it - fire and let it retry in the background
-    return state.authUid;
-  }
+  if(state.authUid && state.authIdToken && Date.now()<(state.authTokenExpiresAt||0)){ return state.authUid; }
   try{
     if(state.authUid && state.authRefreshToken){
       const refreshRes = await fetch(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE_WEB_API_KEY}`, {
@@ -822,7 +802,6 @@ async function ensureAuthIdentity(){
         state.authRefreshToken = data.refresh_token;
         state.authTokenExpiresAt = Date.now() + (Number(data.expires_in)||3600)*1000 - 60000; // refresh a minute early
         saveState();
-        if(!state.authLinkPublished) await publishIdentityLinks(state.authUid, state.authIdToken);
         return state.authUid;
       }
       // refresh failed (e.g. revoked) - fall through to a fresh anonymous sign-in below
@@ -832,12 +811,34 @@ async function ensureAuthIdentity(){
     });
     if(!res.ok) return null;
     const data = await res.json();
+    const isNewIdentity = !state.authUid;
     state.authUid = data.localId;
     state.authIdToken = data.idToken;
     state.authRefreshToken = data.refreshToken;
     state.authTokenExpiresAt = Date.now() + (Number(data.expiresIn)||3600)*1000 - 60000;
     saveState();
-    await publishIdentityLinks(data.localId, data.idToken);
+    if(isNewIdentity){
+      // Best-effort for now - Stage 2's rules make both of these first-claim-only so neither can be
+      // overwritten later. authLink (uid->playerId) lets a rule check "what playerId do I own" from
+      // my own auth.uid directly. playerClaim (playerId->uid) is the reverse lookup, needed so a rule
+      // can check "has this playerId already been claimed by a DIFFERENT uid" before allowing a new
+      // authLink to be created - without it, someone could link their own uid to someone else's
+      // existing playerId and hijack their profile.
+      const myPlayerId = ensurePlayerId();
+      const authParam = state.authIdToken ? `?auth=${state.authIdToken}` : '';
+      try{
+        await fetch(`${FIREBASE_DB_URL}/shared/authLink:${data.localId}.json${authParam}`, {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({playerId: myPlayerId, linkedAt: Date.now()})
+        });
+      }catch(e){}
+      try{
+        await fetch(`${FIREBASE_DB_URL}/shared/playerClaim:${firebaseSafeKey(myPlayerId)}.json${authParam}`, {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({uid: data.localId, claimedAt: Date.now()})
+        });
+      }catch(e){}
+    }
     return state.authUid;
   }catch(e){ return null; }
 }
@@ -1162,11 +1163,17 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.29';
+const FIRMWARE_VERSION = '6.27';
 const FIRMWARE_CHANGELOG = [
-  'Fixed a real bug: closing Customize Scanner (from Settings) while on any tab other than Scan left the scanner bezel stuck visible, merged behind whatever tab you returned to. The bezel now correctly hides again when it should',
-  'Fixed a real bug: Boss Training\u2019s persistent Back button had no guard against leaving mid-fight, letting the fight (and the opponent\u2019s attacks) keep running invisibly in the background - now blocked exactly like other active-fight contexts, with the same message',
-  'Fixed a related gap found while investigating the above: the shared fight-lock guard hardcoded Scan as the one always-safe tab to escape to, which was backwards for Boss Training specifically (which happens on the VS tab, not Scan) - a player could still escape via the bottom tab bar\u2019s Scan button alone. Now correctly blocks leaving to any other tab, for either fight context',
+  'Fixed a real bug: achievement and quest-complete pop-ups could interrupt an active battle. They now hold off until Arena, Boss Training, Nearby duels, and Raids are over, and for The Hive they stay held off for the entire run (not just each wave) so a quick next fight is never interrupted',
+  'Fixed a real bug: the "Field a squad with X+ different types" quest could show as fully progressed but never actually complete or pay out its reward - it now completes properly the moment your favourited squad hits the target',
+  'Fixed a real bug: a freshly-revealed monster\u2019s info on the little scanner screen (name, type/rarity/level, stats, barcode) could get squashed or run past the edge of the screen - that layout is now more compact and fits properly',
+  'The tour now ends with a proper send-off - a "Good luck, [Hunter name]!" screen with a Let\u2019s Begin button, before landing back on the Scan tab',
+  'The tour\u2019s dimmed backdrop is noticeably more transparent now, so more of the real menu stays visible behind the spotlight instead of the tour blacking most of it out',
+  'Fixed a real bug: starting the tour from a page scrolled down (e.g. tapping How to Play near the bottom of the Log tab) measured the first spotlight against that stale scroll position, so it could open almost entirely off-screen - the page now scrolls back to the top before the tour begins',
+  'The tour now walks through VS properly too: Player VS Player, Battle Arena, and Boss Training each get their own stop, and Battle Arena goes one step further to explain Normal Training and The Hive separately',
+  'Fixed a real bug: the tour\u2019s bubble arrow always pointed at the centre of the screen instead of the thing it was explaining, because the bubble itself was always centred on the screen rather than on its target - it\u2019s now positioned (and the arrow re-aimed) against the actual target\u2019s position every step',
+  'The tour now walks through Scan, Squad, and Log properly rather than skimming over them, one sub-page at a time',
 ];
 // If this ever gets wrapped in a native Android shell, that shell can set
 // window.APP_VERSION before this script runs (e.g. from BuildConfig.VERSION_NAME) -
@@ -1586,6 +1593,7 @@ function renderBossEncounter(){
   const ready = favs.length>=5;
   const chance = estimateBossWinChance(boss);
   const chanceColor = hpBarColor(chance/100);
+  screenEl.classList.remove('encounter-compact');
   screenEl.innerHTML = `
     <div class="float" style="margin:6px auto;display:flex;justify-content:center;">${monsterSVG(boss,100)}</div>
     <div class="hp-bar-wrap" style="width:120px;margin:4px auto;"><div class="hp-bar-fill" style="background:#3f9142;width:100%;"></div></div>
@@ -1649,6 +1657,7 @@ function startBossBattle(){
   const fainted = team.map(()=>false);
   let resolved=false, lastTapAt=0, opponentTimer=null, lastHiddenAt=0, autoFighterTimer=null;
 
+  screenEl.classList.remove('encounter-compact');
   screenEl.innerHTML = `
     <div class="float" id="bossFighterWrap" style="margin:4px auto;display:flex;justify-content:center;position:relative;">${monsterSVG(boss,88)}</div>
     <div class="hp-bar-wrap" style="width:140px;margin:2px auto;"><div class="hp-bar-fill" id="bossHpBar"></div></div>
@@ -2149,12 +2158,30 @@ function ensureDailyQuests(){
     state.dailyQuests = { dateKey: today, quests, skipsUsed:{} };
     saveState();
   }
+  syncStateCheckQuests();
 }
 function questTemplateFor(q){ return QUEST_TEMPLATES.find(t=>t.key===q.templateKey); }
 function questCurrentProgress(q){
   const t = questTemplateFor(q);
   if(t.stateCheck && t.key==='diverseSquad') return Math.min(q.target, new Set(favoritedSquad().map(m=>m.type)).size);
   return q.progress;
+}
+// stateCheck quests (like diverseSquad) compute their progress live from current game state rather than
+// being nudged up by incrementQuestProgress() - without this, they can visually show as "5/5" complete
+// but never actually flip q.completed or grant the reward. Call this after anything that could change a
+// stateCheck quest's live value (squad favourites changing), plus on every quest-list check as a safety net.
+function syncStateCheckQuests(){
+  if(!state.dailyQuests || !state.dailyQuests.quests) return;
+  let anyCompleted = false;
+  state.dailyQuests.quests.forEach(q=>{
+    const t = questTemplateFor(q);
+    if(t && t.stateCheck && !q.completed && !q.skipped){
+      const val = questCurrentProgress(q);
+      q.progress = val;
+      if(val >= q.target){ q.completed = true; anyCompleted = true; grantQuestReward(q); }
+    }
+  });
+  if(anyCompleted) saveState();
 }
 function incrementQuestProgress(templateKey, amount){
   ensureDailyQuests();
@@ -2180,7 +2207,7 @@ function grantQuestReward(q){
 }
 function showNextQuestPopup(){
   if(questPopupQueue.length===0) return;
-  if(battleCountdownActive){ setTimeout(showNextQuestPopup, 400); return; }
+  if(isBattleBusy()){ setTimeout(showNextQuestPopup, 400); return; }
   const {q, diff} = questPopupQueue[0];
   showQuestCompletePopup(q, diff, ()=>{
     questPopupQueue.shift();
@@ -2279,6 +2306,13 @@ function achievementsUnlockedCount(){
 let achievementPopupQueue = [];
 let battleCountdownActive = false; // true while any "3, 2, 1, TAP!" countdown is on screen - popups defer until it clears
 let achievementDoubleUsedThisBatch = false;
+// Any of these being true means the player is mid-battle (or, for the Hive, mid-run) and an achievement/quest
+// popup would interrupt them or steal a tap. Popups queue up and wait until every one of these clears.
+// hiveRunActive in particular stays true for the WHOLE Hive run (all waves + checkpoints), so popups are
+// fully held off until the run ends, per request, rather than sneaking in between waves.
+function isBattleBusy(){
+  return !!(battleCountdownActive || bossBattleLocked || wildBattleLocked || hiveRunActive || nearbyDuelInProgress || raidBattleInProgress);
+}
 function checkAchievements(){
   if(!state.achievementTierAwarded) state.achievementTierAwarded = {};
   const newlyUnlocked = [];
@@ -2306,7 +2340,7 @@ function checkAchievements(){
 }
 function showNextAchievementPopup(){
   if(achievementPopupQueue.length===0) return;
-  if(battleCountdownActive){ setTimeout(showNextAchievementPopup, 400); return; }
+  if(isBattleBusy()){ setTimeout(showNextAchievementPopup, 400); return; }
   const next = achievementPopupQueue[0];
   showAchievementPopup(next.cat, next.tierIdx, ()=>{
     achievementPopupQueue.shift();
@@ -2356,6 +2390,7 @@ let achievementsPage = 0;
 const ACHIEVEMENTS_PAGE_SIZE = 5;
 function renderQuests(container){
   ensureDailyQuests();
+  syncStateCheckQuests();
   let anyNewlySeen = false;
   state.dailyQuests.quests.forEach(q=>{ if((q.completed||q.skipped) && !q.seen){ q.seen=true; anyNewlySeen=true; } });
   if(anyNewlySeen){ saveState(); }
@@ -2830,7 +2865,7 @@ const BOOST_ITEMS = [
   {key:'xp5x', name:'XP x5 Boost', desc:'5x XP for your whole squad - 3 minutes', cost:14000, kind:'xp', mult:5, badge:'×5', durationMs:3*60000},
   {key:'coinDoubler', name:'Coin Doubler', desc:'Doubles coins earned - 5 minutes', cost:5000, kind:'coin', mult:2, badge:'×C', durationMs:5*60000},
   {key:'instantLevelPotion', name:'Instant Level Potion', desc:'Instantly levels up each of your 5 favourites by one level', cost:10000, kind:'instantLevel'},
-  {key:'buyRank', name:'Buy Rank', desc:'Instantly advance to your next Hunter Rank', cost:100000, kind:'buyRank'},
+  {key:'buyRank', name:'Buy Rank', desc:'Instantly advance to your next Hunter Rank', cost:15000, kind:'buyRank'},
   {key:'buyEgg', name:'Mystery Egg', desc:'A guaranteed Rare-or-better egg, same odds as one found scanning - still takes time to hatch', cost:25000, kind:'buyEgg'},
   {key:'onlyMaxHits', name:'Only Max Hits', desc:'Every tap lands your maximum possible hit - 5 minutes', cost:50000, kind:'maxHit', mult:1, badge:'MAX', durationMs:5*60000},
 ];
@@ -3306,6 +3341,7 @@ function toggleFavorite(m){
   m.favorite = !m.favorite;
   if(m.favorite) m.favoritedAt = Date.now();
   saveState();
+  syncStateCheckQuests();
   return true;
 }
 
@@ -3388,11 +3424,11 @@ function stickerTileDataURI(){
   return `url("data:image/svg+xml,${encodeURIComponent(tile)}")`;
 }
 const SHELL_THEMES = [
-  {key:'teal', name:'Teal', bg:'#16323E', mid:'#3E7C82'},
-  {key:'crimson', name:'Crimson', bg:'#5C1620', mid:'#A8384A'},
-  {key:'violet', name:'Violet', bg:'#3A2060', mid:'#6B3FA0'},
-  {key:'forest', name:'Forest', bg:'#1E4A2A', mid:'#3D7A4C'},
-  {key:'charcoal', name:'Charcoal', bg:'#333333', mid:'#5C5C5C'},
+  {key:'teal', name:'Teal', bg:'#16323E'},
+  {key:'crimson', name:'Crimson', bg:'#5C1620'},
+  {key:'violet', name:'Violet', bg:'#3A2060'},
+  {key:'forest', name:'Forest', bg:'#1E4A2A'},
+  {key:'charcoal', name:'Charcoal', bg:'#333333'},
 ];
 const LASER_COLORS = [
   {key:'red', name:'Red', bar:'rgba(230,30,30,.75)', glow:'rgba(230,30,30,.8)'},
@@ -3403,16 +3439,16 @@ const LASER_COLORS = [
   {key:'white', name:'White', bar:'rgba(255,255,255,.85)', glow:'rgba(255,255,255,.9)'},
 ];
 const SCANNER_SKINS = [
-  {key:'sparkly', name:'Sparkly', desc:'A shimmering starfield shell, bright white laser', cost:15000, bezelClass:'skin-sparkly', laserBar:'rgba(255,255,255,.9)', laserGlow:'rgba(255,255,255,.95)', scanFx:'fx-sparkly', bg:'#1a0f2e', bgMid:'#2a1a3e'},
-  {key:'gold', name:'Gold', desc:'A gleaming gold shell, warm golden laser', cost:15000, bezelClass:'skin-gold', laserBar:'rgba(255,200,50,.85)', laserGlow:'rgba(255,200,50,.9)', scanFx:'fx-gold', bg:'#8B6508', bgMid:'#FFD700'},
-  {key:'space', name:'Space', desc:'A deep-space shell, pulsing violet laser', cost:15000, bezelClass:'skin-space', laserBar:'rgba(150,80,255,.85)', laserGlow:'rgba(150,80,255,.9)', scanFx:'fx-space', bg:'#0d0620', bgMid:'#3a1a5e'},
-  {key:'camo', name:'Camo', desc:'A tactical desert shell, amber laser', cost:15000, bezelClass:'skin-camo', laserBar:'rgba(255,140,30,.85)', laserGlow:'rgba(255,140,30,.9)', scanFx:'fx-camo', bg:'#5c4a2e', bgMid:'#a68b5c'},
-  {key:'stickers', name:'Stickers', desc:'A shell covered in stickers, rainbow laser', cost:15000, bezelClass:'skin-stickers', laserBar:null, laserGlow:null, scanFx:'fx-stickers', bg:'#6b5d47', bgMid:'#e8e2d5'},
-  {key:'gogh', name:'Gogh', desc:'Starry Night swirling shell, swirling blue laser', cost:15000, bezelClass:'skin-gogh', laserBar:'rgba(70,130,220,.9)', laserGlow:'rgba(70,130,220,.9)', scanFx:'fx-gogh', bg:'#1a2f5e', bgMid:'#3a6ea8'},
-  {key:'clear', name:'Clear', desc:'See-through shell with visible wiring, crossed green lasers', cost:15000, bezelClass:'skin-clear', laserBar:'rgba(80,255,140,.9)', laserGlow:'rgba(80,255,140,.9)', scanFx:'fx-clear', bg:'#5c6b66', bgMid:'#b4c8c0'},
-  {key:'matrix', name:'Matrix', desc:'Green-to-black gradient shell, full-screen falling code', cost:15000, bezelClass:'skin-matrix', laserBar:'rgba(80,255,120,.9)', laserGlow:'rgba(80,255,120,.9)', scanFx:'fx-matrix', bg:'#060606', bgMid:'#0a2e12'},
-  {key:'punk', name:'Punk', desc:'A steampunk brass-and-gear shell, yellow and red laser', cost:15000, bezelClass:'skin-punk', laserBar:'rgba(240,190,50,.9)', laserGlow:'rgba(220,60,40,.85)', scanFx:'fx-punk', bg:'#5c3f22', bgMid:'#a67c4a'},
-  {key:'blocks', name:'Blocks', desc:'A blocky world cross-section shell, from sky to lava', cost:15000, bezelClass:'skin-blocks', laserBar:'rgba(255,255,255,.85)', laserGlow:'rgba(255,255,255,.9)', scanFx:'fx-blocks', bg:'#6b4a2e', bgMid:'#4a9e3f'},
+  {key:'sparkly', name:'Sparkly', desc:'A shimmering starfield shell, bright white laser', cost:15000, bezelClass:'skin-sparkly', laserBar:'rgba(255,255,255,.9)', laserGlow:'rgba(255,255,255,.95)', scanFx:'fx-sparkly'},
+  {key:'gold', name:'Gold', desc:'A gleaming gold shell, warm golden laser', cost:15000, bezelClass:'skin-gold', laserBar:'rgba(255,200,50,.85)', laserGlow:'rgba(255,200,50,.9)', scanFx:'fx-gold'},
+  {key:'space', name:'Space', desc:'A deep-space shell, pulsing violet laser', cost:15000, bezelClass:'skin-space', laserBar:'rgba(150,80,255,.85)', laserGlow:'rgba(150,80,255,.9)', scanFx:'fx-space'},
+  {key:'camo', name:'Camo', desc:'A tactical desert shell, amber laser', cost:15000, bezelClass:'skin-camo', laserBar:'rgba(255,140,30,.85)', laserGlow:'rgba(255,140,30,.9)', scanFx:'fx-camo'},
+  {key:'stickers', name:'Stickers', desc:'A shell covered in stickers, rainbow laser', cost:15000, bezelClass:'skin-stickers', laserBar:null, laserGlow:null, scanFx:'fx-stickers'},
+  {key:'gogh', name:'Gogh', desc:'Starry Night swirling shell, swirling blue laser', cost:15000, bezelClass:'skin-gogh', laserBar:'rgba(70,130,220,.9)', laserGlow:'rgba(70,130,220,.9)', scanFx:'fx-gogh'},
+  {key:'clear', name:'Clear', desc:'See-through shell with visible wiring, crossed green lasers', cost:15000, bezelClass:'skin-clear', laserBar:'rgba(80,255,140,.9)', laserGlow:'rgba(80,255,140,.9)', scanFx:'fx-clear'},
+  {key:'matrix', name:'Matrix', desc:'Green-to-black gradient shell, full-screen falling code', cost:15000, bezelClass:'skin-matrix', laserBar:'rgba(80,255,120,.9)', laserGlow:'rgba(80,255,120,.9)', scanFx:'fx-matrix'},
+  {key:'punk', name:'Punk', desc:'A steampunk brass-and-gear shell, yellow and red laser', cost:15000, bezelClass:'skin-punk', laserBar:'rgba(240,190,50,.9)', laserGlow:'rgba(220,60,40,.85)', scanFx:'fx-punk'},
+  {key:'blocks', name:'Blocks', desc:'A blocky world cross-section shell, from sky to lava', cost:15000, bezelClass:'skin-blocks', laserBar:'rgba(255,255,255,.85)', laserGlow:'rgba(255,255,255,.9)', scanFx:'fx-blocks'},
 ];
 function shellSwatchesHTML(){
   const basic = SHELL_THEMES.map(s=> `<button class="btn tiny ${state.scannerCustomization.shell===s.key?'yolk':'cream'}" data-shell="${s.key}">${s.name}</button>`).join('');
@@ -3451,16 +3487,12 @@ function applyScannerCustomization(){
   if(skin){
     if(skin.laserBar) document.body.style.setProperty('--laser-bar', skin.laserBar);
     if(skin.laserGlow) document.body.style.setProperty('--laser-glow', skin.laserGlow);
-    if(skin.bg) document.body.style.setProperty('--shell-dark', skin.bg);
-    document.body.style.setProperty('--shell-mid', skin.bgMid || skin.bg || '#16323E');
   } else {
     const shell = SHELL_THEMES.find(s=>s.key===sc.shell) || SHELL_THEMES[0];
     const laser = LASER_COLORS.find(l=>l.key===sc.laser) || LASER_COLORS[0];
     document.body.style.setProperty('--bezel-bg', shell.bg);
     document.body.style.setProperty('--laser-bar', laser.bar);
     document.body.style.setProperty('--laser-glow', laser.glow);
-    document.body.style.setProperty('--shell-dark', shell.bg);
-    document.body.style.setProperty('--shell-mid', shell.mid || shell.bg);
   }
   document.querySelectorAll('.matrix-rain-overlay, .clear-cross-line').forEach(el=> el.remove());
   document.querySelectorAll('.screen').forEach(screenEl=>{
@@ -3581,7 +3613,6 @@ function showScannerCustomizeModal(settingsOverlay){
     document.getElementById('scannerCustomizeDone').addEventListener('click', ()=>{
       clearInterval(arenaTickTimer); clearInterval(vsBoostTickTimer); clearInterval(arenaSkipTickTimer); clearInterval(boostsTickTimer); clearInterval(squadTickTimer);
       currentTab = wasTab; versusCategory = wasVersusCategory;
-      document.querySelector('.bezel').style.display = (wasTab==='scan') ? 'block' : 'none';
       renderTab();
     });
   };
@@ -3970,7 +4001,6 @@ function openEggHatchPopup(index, panel){
     </div>
   </div>`;
   document.body.appendChild(overlay);
-  document.body.style.overflow = 'hidden';
   const tapZone = document.getElementById('eggTapZone');
   const artwork = document.getElementById('eggArtwork');
   const cracksEl = document.getElementById('eggCracksSvg');
@@ -4017,7 +4047,7 @@ function completeEggHatch(index, panel, overlay){
         <div class="pixel sm">${RARITY_STYLE[monster.rarity].label} - Lv.${monster.level}</div>
         <div class="buttons-row"><button class="btn yolk small full" id="eggHatchCloseBtn">Nice!</button></div>
       </div>`;
-      document.getElementById('eggHatchCloseBtn').addEventListener('click', ()=>{ overlay.remove(); document.body.style.overflow = ''; renderScannerFirmware(panel); });
+      document.getElementById('eggHatchCloseBtn').addEventListener('click', ()=>{ overlay.remove(); renderScannerFirmware(panel); });
     }, 350);
   }, 300);
 }
@@ -4037,6 +4067,7 @@ function idleScreen(){
     <div class="pixel md">READY TO SCAN</div>
     <div class="pixel sm">POINT CAMERA AT A<br>BARCODE, OR TYPE ONE IN</div>
   `;
+  screenEl.classList.remove('encounter-compact');
   screenEl.innerHTML = `
     <canvas id="noiseCanvas" width="130" height="115"></canvas>
     <div class="${scanLineClass()}"></div>
@@ -4052,6 +4083,7 @@ function hideIdleButtons(){ idleButtonsRow.style.display='none'; }
 function renderEggFound(egg){
   stopNoise();
   dynamicZone.innerHTML='';
+  screenEl.classList.remove('encounter-compact');
   screenEl.innerHTML = `
     <div class="pixel sm" style="color:#D4A017;">EGG FOUND</div>
     <div class="float" style="width:96px;height:96px;margin:6px auto;">${eggSVG(egg.barcode,96)}</div>
@@ -4067,6 +4099,7 @@ function renderEggAlreadyIncubating(egg){
   stopNoise();
   dynamicZone.innerHTML='';
   const ready = Date.now()>=egg.readyAt;
+  screenEl.classList.remove('encounter-compact');
   screenEl.innerHTML = `
     <div class="pixel sm" style="color:#D4A017;">ALREADY INCUBATING</div>
     <div class="float" style="width:96px;height:87px;margin:6px auto;">${nestSVG(96)}</div>
@@ -4084,7 +4117,7 @@ function backToIdle(){
   const panel = document.getElementById('panel');
   if(panel) renderScannerFirmware(panel);
 }
-function capturingScreen(){ stopNoise(); screenEl.innerHTML = `<video class="cam" id="camVideo" autoplay playsinline muted style="width:100%;border-radius:10px;background:#000;max-height:200px;object-fit:cover;"></video><div class="pixel sm" style="margin-top:6px;">SCANNING...</div>`; }
+function capturingScreen(){ stopNoise(); screenEl.classList.remove('encounter-compact'); screenEl.innerHTML = `<video class="cam" id="camVideo" autoplay playsinline muted style="width:100%;border-radius:10px;background:#000;max-height:200px;object-fit:cover;"></video><div class="pixel sm" style="margin-top:6px;">SCANNING...</div>`; }
 
 async function startCamera(){
   if(scannerSetupActive) return;
@@ -4186,14 +4219,17 @@ function renderEncounter(wasDiscarded){
   const panel = document.getElementById('panel');
   if(panel) renderScannerFirmware(panel);
   const m = encounter.monster, rs = RARITY_STYLE[m.rarity];
+  screenEl.classList.add('encounter-compact');
   screenEl.innerHTML = `
-    <div class="pixel sm" style="color:${rs.color}">${encounter.isDuplicate?'ALREADY CAUGHT':(wasDiscarded?'SEEN BEFORE':'NEW SIGNAL')}</div>
-    ${m.holo?`<div class="pixel sm" style="color:#D4A017;">${iconSparkle()} HOLO</div>`:''}
-    <div class="mini-svg float" style="width:78px;height:78px;border-radius:50%;${auraStyle(m)}">${monsterSVG(m,78)}</div>
-    <div class="pixel md">${m.name}</div>
-    <div class="pixel sm">${typeIcon(m.type,13)} ${m.typeLabel} · ${rs.label} · Lv.${m.level}</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;">
+      <div class="pixel sm" style="color:${rs.color}">${encounter.isDuplicate?'ALREADY CAUGHT':(wasDiscarded?'SEEN BEFORE':'NEW SIGNAL')}</div>
+      ${m.holo?`<div class="pixel sm" style="color:#D4A017;">${iconSparkle()} HOLO</div>`:''}
+    </div>
+    <div class="mini-svg float" style="width:62px;height:62px;border-radius:50%;${auraStyle(m)}">${monsterSVG(m,62)}</div>
+    <div class="pixel md" style="font-size:13px;">${m.name}</div>
+    <div class="pixel sm" style="font-size:10.5px;">${typeIcon(m.type,12)} ${m.typeLabel} · ${rs.label} · Lv.${m.level}</div>
     <div class="stat-row">${statLine(m.stats)}</div>
-    ${encounter.battleCount?`<div class="hint">Weakened from battle x${encounter.battleCount} - capture chance boosted.</div>`:''}
+    ${encounter.battleCount?`<div class="hint" style="font-size:9px;">Weakened from battle x${encounter.battleCount} - capture chance boosted.</div>`:''}
     <div class="hint" style="font-size:9px;">Barcode: ${m.barcode}</div>
   `;
   manualRow.style.display='none'; hideIdleButtons();
@@ -4265,6 +4301,7 @@ function openCaptureScreen(){
   encounterSubScreen = 'capture';
   const m = encounter.monster;
   const items = CAPTURE_ITEMS.filter(it=> (state.inventory[it.key]||0)>0 && !it.queenOnly);
+  screenEl.classList.remove('encounter-compact');
   screenEl.innerHTML = `
     <div class="mini-svg float" style="width:80px;height:80px;border-radius:50%;${auraStyle(m)}">${monsterSVG(m,80)}</div>
     <div class="pixel md">${m.name}</div>
@@ -4984,7 +5021,7 @@ function rateLimit(key, minGapMs){
 function switchTab(name){
   if(scannerSetupActive) return; // dummy screen during Scanner Setup - genuinely inert, not just visually blank
   if(rateLimit('tabSwitch', 180)) return; // rapid successive switches are the known trigger for the GPU-compositor tile glitch
-  if(bossBattleLocked && name!==currentTab){ showToast("You can't leave until the fight is over!"); return; }
+  if(bossBattleLocked && name!=='scan'){ showToast("You can't leave until the fight is over!"); return; }
   if(wildBattleLocked && name!=='scan'){ showToast("Finish the fight before switching tabs!"); return; }
   if(nearbyDuelInProgress && name!=='versus'){ showToast("Finish the fight before switching tabs!"); return; }
   if(hiveRunActive && name!=='versus'){ showToast("Finish or exit your Hive run before switching tabs!"); return; }
@@ -5800,10 +5837,6 @@ function renderProfile(container, panel){
         return `<span class="cat-badge" style="width:22px;height:22px;background:${color};border-radius:6px;display:inline-flex;">${achievementIcon(key)}</span>`;
       }).join(' ')
     : '<span class="hint">None yet</span>';
-  const crownCount = state.inventory.queensCrown||0;
-  const crownRow = crownCount>0
-    ? Array.from({length: Math.min(crownCount,10)}).map(()=> iconCrown()).join('') + (crownCount>10?` <span class="pixel sm">+${crownCount-10}</span>`:'')
-    : '<span class="hint">None yet</span>';
   container.innerHTML = `
     <div class="section-label">Hunter Profile</div>
     <div class="log-row"><div class="log-info"><div class="log-name">${p.name}</div><div class="log-meta">Wins ${p.totalWins} · Fights ${p.totalFights} · Best streak ${p.bestStreak} · Hive Streak: ${state.stats.hiveBestKillCount||0} · K:D ${kd} · ${achievementsUnlockedCount()}/${ACHIEVEMENT_CATEGORIES.length*5} Achievements</div></div></div>
@@ -5811,7 +5844,6 @@ function renderProfile(container, panel){
     <div style="position:relative; margin:4px 0 8px;">${rankRibbonSVG(rank, 300)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-weight:800;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.35);font-size:15px;">${rankRibbonLabel(rank)}</div></div>
     <div class="log-row" id="highestBeastRow" style="${p.highest?'cursor:pointer;':''}"><div class="log-info"><div class="log-name">Highest Skrambeast</div><div class="log-meta">${p.highest? p.highest.name+' - Lv.'+p.highest.level+' ('+(p.highest.isBoss?'Queen':RARITY_STYLE[p.highest.rarity].label)+')'+(p.highest.level>=MAX_LEVEL_BY_RARITY[p.highest.rarity]?` ${iconTrophy(13,RARITY_STYLE[p.highest.rarity].color)}`:'') : '-'}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Max Level Trophies (${trophyCount})</div><div class="log-meta">${trophyRow}</div></div></div>
-    <div class="log-row"><div class="log-info"><div class="log-name">Queen's Crowns (${crownCount})</div><div class="log-meta">${crownRow}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Recent Achievements</div><div class="log-meta">${achRow}</div></div></div>
     <div class="log-row"><div class="log-info"><div class="log-name">Secrets Known</div></div><div class="log-status" id="secretsKnownBadge" style="${easterEggStepDone('egg1','a')?'background:#1A1F1C;color:#fff;':'background:#D4A017;'}">${secretsKnownCount()}/${GAME_SECRETS.length}</div></div>`;
   document.getElementById('secretsKnownBadge').addEventListener('click', ()=>{
@@ -6574,9 +6606,8 @@ function renderBag(panel){
 function renderStore(panel){
   if(storeCategory==='bag'){ renderBag(panel); return; }
   if(!storeCategory){
-    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">STORE</div><div style="display:flex; align-items:center; gap:6px;"><button class="btn yolk" style="padding:5px 12px; font-size:13px; border-radius:999px; box-shadow:none; flex:none;" id="bagOpenBtn">${iconBag()} Inventory</button><div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div></div></div><div id="storeMainAdRow"></div><div class="page-bar" id="storeCatPageBar"></div><div id="storeCatList"></div>`;
+    panel.innerHTML = `<div class="top-bar"><div class="pixel sm">STORE</div><div style="display:flex; align-items:center; gap:6px;"><button class="btn yolk" style="padding:5px 12px; font-size:13px; border-radius:999px; box-shadow:none; flex:none;" id="bagOpenBtn">${iconBag()} Inventory</button><div class="coin-badge">${iconCoin()} ${formatCoins(state.coins)}</div></div></div><div class="page-bar" id="storeCatPageBar"></div><div id="storeCatList"></div>`;
     document.getElementById('bagOpenBtn').addEventListener('click', ()=>{ storeCategory='bag'; bagPage=0; renderStore(panel); });
-    renderFreeAdBoostRows(document.getElementById('storeMainAdRow'), panel);
     const totalPages = Math.max(1, Math.ceil(STORE_CATEGORIES.length/STORE_CAT_PAGE_SIZE));
     storeCatPage = Math.min(storeCatPage, totalPages-1);
     const pageCats = STORE_CATEGORIES.slice(storeCatPage*STORE_CAT_PAGE_SIZE, storeCatPage*STORE_CAT_PAGE_SIZE+STORE_CAT_PAGE_SIZE);
@@ -6697,11 +6728,6 @@ function renderCostumes(container, panel){
     renderCostumes(container, panel);
   });
   container.appendChild(row);
-  const seasonalSection = document.createElement('div'); seasonalSection.className='section-label'; seasonalSection.textContent='Seasonal';
-  container.appendChild(seasonalSection);
-  const seasonalNote = document.createElement('div'); seasonalNote.className='hint'; seasonalNote.style.cssText='text-align:center;padding:6px 0;';
-  seasonalNote.textContent = 'Nothing available right now - check back for seasonal drops.';
-  container.appendChild(seasonalNote);
 }
 function showItemDetailPopupCustom(name, visualHtml, descHtml){
   const overlay = document.createElement('div');
@@ -6781,8 +6807,8 @@ let boostsPage = 0;
 let skinsPage = 0;
 const SKINS_PAGE_SIZE = 5;
 const BOOSTS_PAGE_SIZE = 5;
-function renderFreeAdBoostRows(container, panel){
-  const holder = document.createElement('div');
+function renderBoosts(container, panel){
+  container.innerHTML = `<div id="freeAdBoostRow"></div><div class="page-bar" id="boostsPageBar" style="margin-top:6px;"></div><div id="boostsList" style="margin-top:4px;"></div>`;
   const adCooldownActive = Date.now() < (state.freeAdBoostCooldownUntil||0);
   const coinBoostActive = state.activeBoosts && state.activeBoosts['coin'] && Date.now()<state.activeBoosts['coin'].expiresAt;
   const adBlocked = adCooldownActive || coinBoostActive;
@@ -6798,11 +6824,11 @@ function renderFreeAdBoostRows(container, panel){
         state.freeAdBoostCooldownUntil = Date.now()+30*60000;
         saveState(); sfxCoin();
         showToast("Free Coin Boost activated!");
-        renderStore(panel);
+        renderBoosts(container, panel);
       });
     });
   }
-  holder.appendChild(adRow);
+  document.getElementById('freeAdBoostRow').appendChild(adRow);
   const xpAdCooldownActive = Date.now() < (state.freeAdXpBoostCooldownUntil||0);
   const xpBoostActive = state.activeBoosts && state.activeBoosts['xp'] && Date.now()<state.activeBoosts['xp'].expiresAt;
   const xpAdBlocked = xpAdCooldownActive || xpBoostActive;
@@ -6818,15 +6844,11 @@ function renderFreeAdBoostRows(container, panel){
         state.freeAdXpBoostCooldownUntil = Date.now()+30*60000;
         saveState();
         showToast("Free XP Boost activated!");
-        renderStore(panel);
+        renderBoosts(container, panel);
       });
     });
   }
-  holder.appendChild(xpAdRow);
-  container.appendChild(holder);
-}
-function renderBoosts(container, panel){
-  container.innerHTML = `<div class="page-bar" id="boostsPageBar" style="margin-top:6px;"></div><div id="boostsList" style="margin-top:4px;"></div>`;
+  document.getElementById('freeAdBoostRow').appendChild(xpAdRow);
   const totalPages = Math.max(1, Math.ceil(BOOST_ITEMS.length/BOOSTS_PAGE_SIZE));
   boostsPage = Math.min(boostsPage, totalPages-1);
   if(totalPages>1){
@@ -7849,10 +7871,7 @@ function renderVersus(panel){
   }
   if(versusCategory==='boss'){
     panel.innerHTML = `<div class="top-bar"><div class="pixel sm">BOSS TRAINING</div>${backRow}</div><div id="bossBoostTimers" style="text-align:right;"></div><div id="bossHost"></div>`;
-    document.getElementById('vcBack').addEventListener('click', ()=>{
-      if(bossBattleLocked){ showToast("You can't leave until the fight is over!"); return; }
-      versusCategory='menu'; renderVersus(panel);
-    });
+    document.getElementById('vcBack').addEventListener('click', ()=>{ versusCategory='menu'; renderVersus(panel); });
     renderBossTraining(document.getElementById('bossHost'));
     return;
   }
@@ -8917,6 +8936,7 @@ function showOnboarding(){
   stopCamera(); stopNoise();
   manualRow.style.display='none'; hideIdleButtons();
   document.getElementById('panel').innerHTML = '';
+  screenEl.classList.remove('encounter-compact');
   screenEl.innerHTML = `<div id="onboardText" class="pixel sm" style="width:100%;box-sizing:border-box;text-align:left;line-height:1.7;font-size:11px;max-height:100%;overflow-y:auto;padding:6px 2px;"></div>`;
   typeLines(WELCOME_LINES, document.getElementById('onboardText'), showNameAndSetup);
 }
@@ -8986,10 +9006,12 @@ function showNameAndSetup(){
       const result = await changeUsername(name);
       if(!result.ok){ showToast(result.message); goBtn.disabled = false; return; }
       panel.innerHTML = '';
+      screenEl.classList.remove('encounter-compact');
       screenEl.innerHTML = `<div id="onboardText" class="pixel sm" style="width:100%;box-sizing:border-box;text-align:left;line-height:1.7;font-size:11px;max-height:100%;overflow-y:auto;padding:6px 2px;"></div>`;
       typeLines(thanksLines(name), document.getElementById('onboardText'), ()=>{
         scannerSetupActive = false;
         document.body.classList.remove('scanner-setup-lock');
+        screenEl.classList.remove('encounter-compact');
         screenEl.innerHTML = '';
         renderTab();
         if(!state.hasSeenTabTour) setTimeout(startTabTour, 400);
