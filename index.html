@@ -31,9 +31,19 @@
     background:radial-gradient(circle at 20% 10%, #1c4552 0%, transparent 55%),
       radial-gradient(circle at 85% 90%, #0e2530 0%, transparent 55%), var(--shell-dark);
     min-height:100vh; font-family:'Rubik',sans-serif; color:var(--ink);
-    display:flex; justify-content:center; padding:18px 12px 40px;
+    display:flex; flex-direction:column; align-items:center; padding:18px 12px 40px;
     -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none;
   }
+  /* Real, readable page content about the game - sits below the device on the page, not inside the
+     app UI itself. Selectable (unlike the game chrome above) since it's meant to be read, not tapped
+     through, and exists so this page reads as more than a bare ad-serving shell. */
+  .site-content{ width:100%; max-width:640px; margin:34px auto 0; color:var(--cream); font-family:'Rubik',sans-serif; -webkit-user-select:text; user-select:text; }
+  .site-content h2{ font-family:'Baloo 2',sans-serif; font-weight:800; font-size:20px; color:var(--yolk); margin:28px 0 10px; }
+  .site-content h2:first-child{ margin-top:0; }
+  .site-content p{ font-size:14px; line-height:1.7; color:rgba(234,227,211,.9); margin:0 0 12px; }
+  .site-content ul{ margin:0 0 12px; padding-left:20px; }
+  .site-content li{ font-size:14px; line-height:1.7; color:rgba(234,227,211,.9); margin-bottom:6px; }
+  .site-content .site-footer-note{ font-size:11px; color:rgba(234,227,211,.5); text-align:center; margin-top:24px; }
   .device{
     width:100%; max-width:460px;
     background:linear-gradient(160deg,var(--shell-mid) 0%, var(--shell-dark) 100%);
@@ -454,6 +464,36 @@
   <div class="panel" id="panel"></div>
   <div class="speaker"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
   <div style="text-align:center; margin-top:10px; font-size:9px; color:rgba(234,227,211,.5); font-family:'Rubik';">© 2026 SKRAMBEASTS™ - All rights reserved. · Skram-Games · BETA</div>
+</div>
+
+<div class="site-content">
+  <h2>What is Skrambeasts?</h2>
+  <p>Skrambeasts turns the everyday clutter of barcodes into a world of creatures to discover. Every product code hides its own Skrambeast - scan the back of a cereal box, a shampoo bottle, or a parcel, and the barcode's own numbers decide exactly which beast appears, how rare it is, and what type it belongs to. No two households ever fully overlap, so the real world becomes your dex.</p>
+  <p>It's a free-to-play collector and battler built for quick sessions: scan something new whenever you spot a barcode, then dip into your Squad, the Arena, or a Hive run whenever you've got a few spare minutes.</p>
+
+  <h2>How to play</h2>
+  <ul>
+    <li><strong>Scan</strong> - point your camera at any real barcode (or type one in manually) to reveal the Skrambeast hiding inside it.</li>
+    <li><strong>Catch or battle</strong> - try to capture a newly discovered Skrambeast, or battle it first to weaken it and improve your odds.</li>
+    <li><strong>Build your Squad</strong> - favourite up to five Skrambeasts to train, level up, and gear out with weapons, armour, and costumes.</li>
+    <li><strong>Fight your way up</strong> - take your Squad into the Battle Arena, push through wave after wave in The Hive, challenge wild Queens in Boss Training, or duel nearby hunters in Player VS Player.</li>
+    <li><strong>Complete Daily Quests and Achievements</strong> - three fresh quests appear every day, and dozens of long-term Achievement categories track your progress across the whole game.</li>
+  </ul>
+
+  <h2>Features</h2>
+  <ul>
+    <li>A living Almanac that logs every Skrambeast you've ever discovered, caught, or shooed away</li>
+    <li>Five elemental types with a full strengths-and-weaknesses chart to master</li>
+    <li>The Hive - an endless wave-based gauntlet with checkpoint bonuses every 25 kills</li>
+    <li>Hunter Ranks, daily quests, and a full Achievements log with dozens of categories to chase</li>
+    <li>Add friends by Hunter Username, trade Skrambeasts, and climb the Global leaderboard</li>
+    <li>Eggs, gear, costumes, and cosmetic scanner shells to collect and customise your setup with</li>
+  </ul>
+
+  <h2>About Skram-Games</h2>
+  <p>Skrambeasts is built and maintained by Skram-Games, an independent solo studio. It's a genuine passion project - built, tested, and updated one firmware release at a time - with more titles in development alongside it.</p>
+
+  <div class="site-footer-note">Skrambeasts is currently in open Beta. Feedback and bug reports are always welcome.</div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1163,8 +1203,9 @@ const MISSION_TIERS = [
   {key:'legendary', name:'Legendary', color:'#D4A017', durationMs:6*3600000, encounters:3, scene:'volcano', coinReward:2000, xpReward:1000},
 ];
 const MISSION_MAX_SLOTS = 5;
-const FIRMWARE_VERSION = '6.27';
+const FIRMWARE_VERSION = '6.28';
 const FIRMWARE_CHANGELOG = [
+  'Added a proper About/How to Play/Features section to the website below the scanner, so the page reads as a real game site rather than a bare app shell (needed to clear an AdSense site review)',
   'Fixed a real bug: achievement and quest-complete pop-ups could interrupt an active battle. They now hold off until Arena, Boss Training, Nearby duels, and Raids are over, and for The Hive they stay held off for the entire run (not just each wave) so a quick next fight is never interrupted',
   'Fixed a real bug: the "Field a squad with X+ different types" quest could show as fully progressed but never actually complete or pay out its reward - it now completes properly the moment your favourited squad hits the target',
   'Fixed a real bug: a freshly-revealed monster\u2019s info on the little scanner screen (name, type/rarity/level, stats, barcode) could get squashed or run past the edge of the screen - that layout is now more compact and fits properly',
